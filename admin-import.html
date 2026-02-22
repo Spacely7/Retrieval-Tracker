@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulk Import — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar"><div class="topbar-title">📁 Bulk Import</div></div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div><div class="page-title">Bulk Device Import</div><div class="page-desc">Import multiple devices from CSV, or add single devices manually.</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;margin-bottom:18px;">
+        <div class="card" style="padding:22px;">
+          <div class="card-title" style="margin-bottom:14px;">📂 Upload CSV File</div>
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-file').click()"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+            <div style="font-size:36px;margin-bottom:10px;">📂</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:5px;">Drop CSV file here</div>
+            <div style="font-size:12px;color:var(--text-muted);">or click to browse</div>
+            <input type="file" id="csv-file" class="upload-input" accept=".csv,.txt" onchange="handleFile(this)">
+          </div>
+          <div style="margin-top:14px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;color:var(--text-muted);">Required CSV Columns</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;" id="col-tags"></div>
+          </div>
+          <button class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="downloadTemplate()">⬇️ Download Template</button>
+        </div>
+        <div class="card" style="padding:22px;">
+          <div class="card-title" style="margin-bottom:14px;">➕ Manual Quick-Add</div>
+          <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Device ID</label><input class="form-input" id="qa-id" placeholder="e.g. 8294402634"></div>
+          <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Agency</label>
+            <select class="form-select" id="qa-agency"><option value="">Select agency</option>
+              <option>COMPASS POWER AFRICA LTD</option><option>KOMENDA SUGAR FACTORY</option><option>RONOR MOTORS</option>
+              <option>WEB HELP GHANA</option><option>DAILY FOOD</option><option>WESTERN BEVERAGES LTD</option>
+              <option>CAVE AND GARDEN</option><option>GLOBAL POLY GHANA</option><option>MIRO TIMBER</option><option>KING RECYCLING SOLUTIONS LTD</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Regime</label>
+            <select class="form-select" id="qa-regime"><option value="">Select regime</option>
+              <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Destination</label>
+            <select class="form-select" id="qa-dest"><option value="">Select destination</option>
+              <option>Elubo</option><option>Daily food Limited</option><option>Sunda Ghana Ltd</option><option>Spaceplast Gh Ltd</option>
+              <option>Newrest</option><option>Paga</option><option>Keda</option><option>Kumasi</option><option>Tema</option><option>Takoradi</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;"><label class="form-label">Date Issued</label><input class="form-input" type="date" id="qa-issued"></div>
+          <div class="form-group" style="margin-bottom:16px;"><label class="form-label">Expected Return</label><input class="form-input" type="date" id="qa-return"></div>
+          <button class="btn btn-primary" onclick="quickAdd()">+ Add Device</button>
+        </div>
+      </div>
+      <div class="card" id="import-preview-card" style="display:none;margin-bottom:18px;">
+        <div class="card-header">
+          <div class="card-title" id="import-preview-title">Import Preview</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="cancelImport()">Cancel</button>
+            <button class="btn btn-accent btn-sm" onclick="confirmImport()">✅ Confirm Import</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Device ID</th><th>Agency</th><th>Regime</th><th>Destination</th><th>Date Issued</th><th>Expected Return</th><th>Status</th></tr></thead>
+            <tbody id="import-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="padding:20px;">
+        <div class="card-title" style="margin-bottom:14px;">📊 Current Database Stats</div>
+        <div class="stats-grid" id="import-stats"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('bulkimport');
+let importBuffer = [];
+
+if (session) {
+  document.getElementById('qa-issued').value = fmtISO(TODAY);
+  document.getElementById('qa-return').value = fmtISO(addDays(TODAY, 14));
+  document.getElementById('col-tags').innerHTML = ['device_id','agency','regime','destination','date_issued','expected_return']
+    .map(c=>`<span style="background:#f0f4ff;color:var(--navy);padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;">${c}</span>`).join('');
+  renderStats();
+}
+
+function renderStats() {
+  const d = DB.getDevices();
+  document.getElementById('import-stats').innerHTML = `
+    <div class="stat-card c-navy"><div class="stat-icon">📦</div><div class="stat-value">${d.length}</div><div class="stat-label">Total Devices</div></div>
+    <div class="stat-card c-accent"><div class="stat-icon">✅</div><div class="stat-value">${d.filter(x=>x.status==='Retrieved').length}</div><div class="stat-label">Retrieved</div></div>
+    <div class="stat-card c-yellow"><div class="stat-icon">⏳</div><div class="stat-value">${d.filter(x=>x.status==='Awaiting Retrieval').length}</div><div class="stat-label">Awaiting</div></div>
+    <div class="stat-card c-red"><div class="stat-icon">⚠️</div><div class="stat-value">${d.filter(x=>x.isDelayed).length}</div><div class="stat-label">Delayed</div></div>`;
+}
+
+function handleFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCSV(e.target.result);
+  reader.readAsText(file);
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => parseCSV(evt.target.result);
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const rows = text.trim().split('\n').map(r => r.split(',').map(c => c.replace(/"/g,'').trim()));
+  const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g,'_'));
+  importBuffer = rows.slice(1).filter(r=>r.length>=4).map(r => {
+    const obj={}; headers.forEach((h,i)=>obj[h]=r[i]||''); return obj;
+  });
+  if (!importBuffer.length) { showToast('No valid rows found in CSV', 'error'); return; }
+  showPreview();
+}
+
+function showPreview() {
+  const existing = DB.getDevices().map(d=>d.id);
+  const card = document.getElementById('import-preview-card');
+  document.getElementById('import-preview-title').textContent = `Preview — ${importBuffer.length} device(s) ready to import`;
+  document.getElementById('import-body').innerHTML = importBuffer.map((r,i) => {
+    const id = r.device_id||r.id||'';
+    const isDup = existing.includes(id);
+    return `<tr style="${isDup?'opacity:.5;':''}">
+      <td style="color:var(--text-muted);">${i+1}</td>
+      <td><strong>${id||'—'}</strong>${isDup?` <span style="color:var(--yellow);font-size:10px;">⚠️ Dup</span>`:''}</td>
+      <td>${r.agency||'—'}</td>
+      <td>${regBadge(r.regime||'Warehouse')}</td>
+      <td>${r.destination||r.dest||'—'}</td>
+      <td class="td-muted">${r.date_issued||'—'}</td>
+      <td class="td-muted">${r.expected_return||'—'}</td>
+      <td>${isDup?`<span class="badge badge-pending">Skip</span>`:`<span class="badge badge-confirmed">Import</span>`}</td>
+    </tr>`;
+  }).join('');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function cancelImport() {
+  importBuffer = [];
+  document.getElementById('import-preview-card').style.display = 'none';
+}
+
+function confirmImport() {
+  const sla = DB.getSLA();
+  const existing = DB.getDevices().map(d=>d.id);
+  let added = 0;
+  importBuffer.forEach(r => {
+    const id = r.device_id||r.id||'';
+    if (!id || existing.includes(id)) return;
+    const regime = r.regime||'Warehouse';
+    const issued = r.date_issued||fmtISO(TODAY);
+    const expectedReturn = r.expected_return||fmtISO(addDays(TODAY,14));
+    const daysOverdue = Math.max(0, Math.floor((TODAY-new Date(expectedReturn))/(1000*86400)));
+    const isDelayed = daysOverdue >= (sla[regime]||3);
+    DB.addDevice({
+      id, regime, agency:r.agency||'Unknown', dest:r.destination||r.dest||'—',
+      issued, expectedReturn, fieldConfirmed:false, fieldConfirmedBy:null,
+      status: isDelayed?'Delayed':'Awaiting Retrieval',
+      daysOverdue, isDelayed, retrievalOfficer:null, retrievalTime:null,
+      auditLog:[{ event:'Device Imported', detail:`Bulk imported by ${session.name}`, time:fmtDate(TODAY), color:'#6d28d9' }]
+    });
+    added++;
+  });
+  DB.logAudit('Bulk Import', `${added} devices imported from CSV`, session);
+  showToast(`✅ ${added} device(s) imported`, 'success');
+  document.getElementById('import-preview-card').style.display = 'none';
+  importBuffer = [];
+  renderStats();
+}
+
+function quickAdd() {
+  const id   = document.getElementById('qa-id').value.trim();
+  const ag   = document.getElementById('qa-agency').value;
+  const reg  = document.getElementById('qa-regime').value;
+  const dest = document.getElementById('qa-dest').value;
+  const iss  = document.getElementById('qa-issued').value;
+  const ret  = document.getElementById('qa-return').value;
+  if (!id||!ag||!reg||!iss||!ret) { showToast('Fill all required fields', 'error'); return; }
+  if (DB.getDevice(id)) { showToast('Device ID already exists', 'error'); return; }
+  const sla = DB.getSLA();
+  const daysOverdue = Math.max(0, Math.floor((TODAY-new Date(ret))/(1000*86400)));
+  const isDelayed = daysOverdue >= (sla[reg]||3);
+  DB.addDevice({
+    id, regime:reg, agency:ag, dest, issued:iss, expectedReturn:ret,
+    fieldConfirmed:false, fieldConfirmedBy:null,
+    status:isDelayed?'Delayed':'Awaiting Retrieval',
+    daysOverdue, isDelayed, retrievalOfficer:null, retrievalTime:null,
+    auditLog:[{ event:'Device Added', detail:`Manually added by ${session.name}`, time:fmtDate(TODAY), color:'#007a67' }]
+  });
+  DB.logAudit('Add Device', `Device ${id} added manually`, session);
+  showToast(`✅ Device ${id} added`, 'success');
+  ['qa-id','qa-issued','qa-return'].forEach(i=>document.getElementById(i).value='');
+  ['qa-agency','qa-regime','qa-dest'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('qa-issued').value = fmtISO(TODAY);
+  document.getElementById('qa-return').value = fmtISO(addDays(TODAY,14));
+  renderStats();
+}
+
+function downloadTemplate() {
+  const csv = 'device_id,agency,regime,destination,date_issued,expected_return\n8999000001,COMPASS POWER AFRICA LTD,Warehouse,Elubo,2026-02-19,2026-03-05\n8999000002,DAILY FOOD,Petroleum,Paga,2026-02-19,2026-02-24';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'retrieval-track-template.csv';
+  a.click();
+  showToast('Template downloaded', 'success');
+}
+</script>
+</body>
+</html>

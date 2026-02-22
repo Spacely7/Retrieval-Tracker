@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMS Alerts — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar"><div class="topbar-title">💬 SMS / Alerts</div></div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div><div class="page-title">SMS / WhatsApp Alerts</div><div class="page-desc">Send retrieval assignments and alerts to officers via SMS or WhatsApp gateway.</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;margin-bottom:18px;">
+        <!-- Gateways -->
+        <div class="card" style="padding:20px;">
+          <div class="card-title" style="margin-bottom:14px;">Select Gateway</div>
+          <div id="gw-list"></div>
+        </div>
+        <!-- Compose -->
+        <div class="card" style="padding:20px;">
+          <div class="card-title" style="margin-bottom:14px;">Compose Alert</div>
+          <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Recipient Officer</label>
+            <select class="form-select" id="sms-officer" onchange="buildPreview()">
+              <option value="">Select officer</option>
+              <option value="Yaw Boateng|233597563674">Yaw Boateng – +233 597 563 674</option>
+              <option value="Kojo Rexford|233206748677">Kojo Rexford – +233 206 748 677</option>
+              <option value="Elias Brown|233244675874">Elias Brown – +233 244 675 874</option>
+              <option value="Kofi Brew|233509765467">Kofi Brew – +233 509 765 467</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Alert Type</label>
+            <select class="form-select" id="sms-type" onchange="buildPreview()">
+              <option value="assignment">Retrieval Assignment</option>
+              <option value="reminder">Upcoming Retrieval Reminder</option>
+              <option value="delay">Delay Escalation Alert</option>
+              <option value="custom">Custom Message</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Agency / Device (Optional)</label>
+            <select class="form-select" id="sms-agency" onchange="buildPreview()">
+              <option value="">— Select agency —</option>
+              <option>COMPASS POWER AFRICA LTD</option><option>KOMENDA SUGAR FACTORY</option>
+              <option>RONOR MOTORS</option><option>WEB HELP GHANA</option><option>DAILY FOOD</option>
+              <option>WESTERN BEVERAGES LTD</option><option>CAVE AND GARDEN</option>
+              <option>GLOBAL POLY GHANA</option><option>MIRO TIMBER</option><option>KING RECYCLING SOLUTIONS LTD</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Custom Note (Optional)</label>
+            <textarea class="form-textarea" id="sms-custom" placeholder="Type a custom note..." style="min-height:60px;" oninput="buildPreview()"></textarea>
+          </div>
+          <div style="background:#f0f4ff;border:1px solid #d0d8f0;border-radius:10px;padding:13px 15px;margin-top:4px;margin-bottom:4px;">
+            <div style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">📱 SMS Preview</div>
+            <div style="font-size:13px;line-height:1.6;" id="sms-preview-box">Select an officer to preview message.</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);text-align:right;margin-bottom:12px;" id="sms-char"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="sendSMS()">📤 Send Alert</button>
+            <button class="btn btn-outline" onclick="broadcastAll()">📣 Broadcast All</button>
+          </div>
+        </div>
+      </div>
+      <!-- Sent Log -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📬 Sent Alert Log</div>
+          <span id="sms-log-count" style="font-size:12px;color:var(--text-muted);"></span>
+        </div>
+        <div id="sms-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('sms');
+let activeGateway = 'arkesel';
+
+const GATEWAYS = [
+  { id:'arkesel',   icon:'📱', name:'Arkesel',                desc:'Ghana SMS gateway · API ready',        badge:'✓ Active' },
+  { id:'wigal',     icon:'📡', name:'Wigal',                  desc:'Ghana/West Africa SMS gateway',         badge:'' },
+  { id:'whatsapp',  icon:'💬', name:'WhatsApp Business API',  desc:'Rich messages via Meta WABA',           badge:'' },
+  { id:'twilio',    icon:'🌐', name:'Twilio',                 desc:'Global SMS / voice platform',           badge:'' },
+];
+
+if (session) { renderGateways(); renderLog(); }
+
+function renderGateways() {
+  document.getElementById('gw-list').innerHTML = GATEWAYS.map(g => `
+    <div class="gateway-card${g.id===activeGateway?' selected':''}" id="gw-${g.id}" onclick="selectGateway('${g.id}')">
+      <div class="gateway-logo" style="background:${g.id==='arkesel'?'#e8f5e9':g.id==='wigal'?'#e3f2fd':g.id==='whatsapp'?'#e8f5e9':'#fce4ec'};">${g.icon}</div>
+      <div><div style="font-weight:700;font-size:13px;">${g.name}</div><div style="font-size:11px;color:var(--text-muted);">${g.desc}</div></div>
+      ${g.badge?`<span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--accent);">${g.badge}</span>`:''}
+    </div>`).join('');
+}
+
+function selectGateway(id) {
+  activeGateway = id;
+  renderGateways();
+  buildPreview();
+}
+
+function buildPreview() {
+  const offVal = document.getElementById('sms-officer').value;
+  const type   = document.getElementById('sms-type').value;
+  const agency = document.getElementById('sms-agency').value;
+  const custom = document.getElementById('sms-custom').value.trim();
+  const preview = document.getElementById('sms-preview-box');
+  if (!offVal) { preview.textContent = 'Select an officer to preview.'; return; }
+  const [name] = offVal.split('|');
+  const msgs = {
+    assignment: `[Retrieval Track] Dear ${name}, you have been assigned a device retrieval from${agency?' '+agency:' the port'}. Please proceed at your earliest convenience. – Port Operations`,
+    reminder:   `[Retrieval Track] Reminder: ${name}, a device${agency?' at '+agency:''} is due for retrieval soon. Please confirm your schedule. – Port Ops`,
+    delay:      `[Retrieval Track] URGENT – ${name}, a device${agency?' from '+agency:''} is overdue. Please retrieve immediately to avoid SLA breach. – Port Ops`,
+    custom:     `[Retrieval Track] ${name}${agency?', regarding '+agency:''}: ${custom||'[your message here]'} – Port Operations`,
+  };
+  const msg = msgs[type] + (custom && type !== 'custom' ? ` Note: ${custom}` : '');
+  preview.textContent = msg;
+  document.getElementById('sms-char').textContent = msg.length + ' characters · via ' + (activeGateway==='whatsapp'?'WhatsApp':activeGateway.charAt(0).toUpperCase()+activeGateway.slice(1));
+}
+
+function sendSMS() {
+  const offVal = document.getElementById('sms-officer').value;
+  if (!offVal) { showToast('Select a recipient officer', 'error'); return; }
+  const [name, phone] = offVal.split('|');
+  const msg = document.getElementById('sms-preview-box').textContent;
+  const agency = document.getElementById('sms-agency').value;
+  DB.addSMS({ to:name, phone, msg, gateway:activeGateway, sentBy:session.name });
+  DB.addNotification({ type:'assign', title:`Alert Sent – ${name}`, desc:`${activeGateway.toUpperCase()} alert sent to +${phone}`, officer:name, agency, tag:'assignment' });
+  DB.logAudit('Send SMS', `Alert sent to ${name} via ${activeGateway}`, session);
+  showToast(`📤 Alert sent to ${name} via ${activeGateway}`, 'success');
+  renderLog();
+}
+
+function broadcastAll() {
+  if (!confirm('Send broadcast to all officers?')) return;
+  const msg = `[Broadcast] Port Operations: Please review your assigned retrievals and confirm pending pickups. – Retrieval Track`;
+  Object.entries(OFFICERS_DATA).forEach(([name,info]) => {
+    DB.addSMS({ to:name, phone:info.phone, msg, gateway:activeGateway, sentBy:session.name });
+  });
+  DB.logAudit('Broadcast SMS', `Broadcast sent to all officers via ${activeGateway}`, session);
+  showToast('📣 Broadcast sent to all officers', 'success');
+  renderLog();
+}
+
+function renderLog() {
+  const log = DB.getSMSLog();
+  document.getElementById('sms-log-count').textContent = log.length + ' sent';
+  document.getElementById('sms-log').innerHTML = log.length
+    ? log.slice(0,20).map(s => {
+        const oInfo = OFFICERS_DATA[s.to] || {};
+        const init  = (s.to||'').split(' ').map(w=>w[0]).join('').slice(0,2);
+        return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);">
+          <div style="width:34px;height:34px;border-radius:50%;background:${oInfo.color||'#1e3a5f'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex-shrink:0;">${init}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:13px;">${s.to} <span style="font-weight:400;font-size:11px;color:var(--text-muted);">via ${s.gateway}</span></div>
+            <div style="font-size:11px;color:var(--text-muted);">+${s.phone} · by ${s.sentBy}</div>
+            <div style="font-size:11px;margin-top:3px;color:var(--text);">${(s.msg||'').slice(0,90)}…</div>
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${timeAgo(s.sentAt)}</div>
+        </div>`;
+      }).join('')
+    : `<div class="empty-state"><div class="empty-icon">📬</div><div class="empty-title">No alerts sent yet</div></div>`;
+}
+</script>
+</body>
+</html>

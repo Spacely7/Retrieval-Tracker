@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Officer Tracker — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">👤 Officer Tracker</div>
+      <div class="topbar-actions">
+        <a href="performance.html" class="btn btn-outline btn-sm">🏆 View Performance</a>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Officer Retrieval Tracker</div>
+          <div class="page-desc">Monitor pending retrievals, issuance history, and device ownership per officer.</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:20px;margin-bottom:18px;">
+        <div class="form-group" style="max-width:320px;">
+          <label class="form-label">Select Retrieval Officer</label>
+          <select class="form-select" id="tracker-officer" onchange="loadOfficer()">
+            <option value="">— Select officer —</option>
+            <option>Yaw Boateng</option>
+            <option>Kojo Rexford</option>
+            <option>Elias Brown</option>
+            <option>Kofi Brew</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="tracker-content" style="display:none;">
+        <div class="stats-grid" id="tracker-stats"></div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title">Pending Retrievals by Agency</div>
+            <span id="tracker-pending-lbl" style="font-size:12px;color:var(--text-muted);"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Agency</th><th>Destination</th><th>Regime</th><th>Issued Qty</th><th>Collected</th><th>Pending</th><th>Date</th><th>Reason</th></tr>
+              </thead>
+              <tbody id="tracker-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Devices Assigned to Officer</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Device ID</th><th>Agency</th><th>Regime</th><th>Status</th><th>Expected Return</th></tr></thead>
+              <tbody id="tracker-devices"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tracker-empty" class="empty-state">
+        <div class="empty-icon">👤</div>
+        <div class="empty-title">Select an officer to view their tracker</div>
+        <div class="empty-desc">Choose from the dropdown above</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('officer');
+if (session && (session.role === 'Retrieval Officer')) {
+  document.getElementById('tracker-officer').value = session.name;
+  loadOfficer();
+}
+
+function loadOfficer() {
+  const officer = document.getElementById('tracker-officer').value;
+  const content = document.getElementById('tracker-content');
+  const empty   = document.getElementById('tracker-empty');
+
+  if (!officer) { content.style.display='none'; empty.style.display='block'; return; }
+  content.style.display = 'block';
+  empty.style.display   = 'none';
+
+  const issuances = DB.getIssuances().filter(i => i.officerName === officer);
+  const devices   = DB.getDevices().filter(d => d.retrievalOfficer === officer);
+  const totQ  = issuances.reduce((a,b)=>a+b.qty,0);
+  const totC  = issuances.reduce((a,b)=>a+b.collected,0);
+  const totP  = issuances.reduce((a,b)=>a+b.pending,0);
+  const oInfo = OFFICERS_DATA[officer] || {};
+
+  document.getElementById('tracker-stats').innerHTML = `
+    <div class="stat-card c-navy">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:${oInfo.color||'#1e3a5f'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;">${officer.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
+        <div><div style="font-family:'Syne',sans-serif;font-weight:700;">${officer}</div><div style="font-size:11px;color:var(--text-muted);">+${oInfo.phone||'—'}</div></div>
+      </div>
+    </div>
+    <div class="stat-card c-navy"><div class="stat-icon">📝</div><div class="stat-value">${issuances.length}</div><div class="stat-label">Issuances</div></div>
+    <div class="stat-card c-accent"><div class="stat-icon">✅</div><div class="stat-value">${totC}</div><div class="stat-label">Collected</div></div>
+    <div class="stat-card c-red"><div class="stat-icon">⏳</div><div class="stat-value">${totP}</div><div class="stat-label">Pending</div></div>
+    <div class="stat-card c-yellow"><div class="stat-icon">📦</div><div class="stat-value">${devices.length}</div><div class="stat-label">Devices Retrieved</div></div>`;
+
+  // Issuance table
+  const tb = document.getElementById('tracker-body');
+  if (!issuances.length) {
+    tb.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No issuances for this officer yet</div></div></td></tr>`;
+  } else {
+    const pending = issuances.filter(i=>i.pending>0);
+    document.getElementById('tracker-pending-lbl').textContent = pending.length + ' with pending devices';
+    tb.innerHTML = issuances.slice().reverse().map(i => {
+      const d = DB.getDevices().find(x=>x.agency===i.agency);
+      return `<tr>
+        <td>${i.agency}</td>
+        <td class="td-muted">${d?.dest||'—'}</td>
+        <td>${regBadge(d?.regime||'—')}</td>
+        <td>${i.qty}</td>
+        <td>${i.collected}</td>
+        <td><strong style="color:${i.pending>0?'var(--red)':'var(--accent)'};">${i.pending}</strong></td>
+        <td class="td-muted">${fmtDateShort(i.createdAt)}</td>
+        <td style="font-size:11px;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;">${i.reason||'—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Devices table
+  const td2 = document.getElementById('tracker-devices');
+  if (!devices.length) {
+    td2.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No devices retrieved by this officer</div></div></td></tr>`;
+  } else {
+    td2.innerHTML = devices.slice(0,20).map(d => {
+      const sc = d.status==='Retrieved'?'badge-retrieved':d.isDelayed?'badge-delayed':'badge-waiting';
+      return `<tr>
+        <td><a class="td-id" href="timeline.html?id=${d.id}">${d.id}</a></td>
+        <td>${d.agency}</td>
+        <td>${regBadge(d.regime)}</td>
+        <td><span class="badge ${sc}">${d.status}</span></td>
+        <td class="td-muted">${fmtDateShort(d.expectedReturn)}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+</script>
+</body>
+</html>

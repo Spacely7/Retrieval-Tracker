@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Timeline — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">🕐 Device Timeline</div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Device Status Timeline</div>
+          <div class="page-desc">Full audit trail for any device — issuance, confirmations, delays, and retrievals.</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:20px;margin-bottom:18px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;align-items:end;">
+          <div class="form-group">
+            <label class="form-label">Search Device ID</label>
+            <div class="search-wrap" style="min-width:unset;">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="tl-search" placeholder="Enter Device ID..." oninput="loadTimeline()" style="padding-left:36px;">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filter by Agency</label>
+            <select class="form-select" id="tl-agency" onchange="loadTimeline()">
+              <option value="">All Agencies</option>
+              <option>COMPASS POWER AFRICA LTD</option><option>KOMENDA SUGAR FACTORY</option>
+              <option>RONOR MOTORS</option><option>WEB HELP GHANA</option><option>DAILY FOOD</option>
+              <option>WESTERN BEVERAGES LTD</option><option>CAVE AND GARDEN</option>
+              <option>GLOBAL POLY GHANA</option><option>MIRO TIMBER</option><option>KING RECYCLING SOLUTIONS LTD</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filter by Regime</label>
+            <select class="form-select" id="tl-regime" onchange="loadTimeline()">
+              <option value="">All Regimes</option>
+              <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filter by Status</label>
+            <select class="form-select" id="tl-status" onchange="loadTimeline()">
+              <option value="">All Status</option>
+              <option>Awaiting Retrieval</option><option>Retrieved</option><option>Delayed</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="tl-content">
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <div class="empty-title">Search for a device to view its timeline</div>
+          <div class="empty-desc">Enter a Device ID, filter by agency, or browse all devices below.</div>
+          <div style="margin-top:14px;"><button class="btn btn-primary btn-sm" onclick="showAll()">Browse All Devices</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('timeline');
+if (session) {
+  // Check if came from another page with ?id=
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  if (id) {
+    document.getElementById('tl-search').value = id;
+    loadTimeline();
+  }
+}
+
+function loadTimeline() {
+  const q      = (document.getElementById('tl-search')?.value||'').toLowerCase();
+  const agency = document.getElementById('tl-agency')?.value||'';
+  const regime = document.getElementById('tl-regime')?.value||'';
+  const status = document.getElementById('tl-status')?.value||'';
+
+  let filtered = DB.getDevices();
+  if (agency) filtered = filtered.filter(d => d.agency === agency);
+  if (regime) filtered = filtered.filter(d => d.regime === regime);
+  if (status) filtered = filtered.filter(d => d.status === status);
+  if (q)      filtered = filtered.filter(d => d.id.toLowerCase().includes(q) || d.agency.toLowerCase().includes(q));
+
+  const c = document.getElementById('tl-content');
+  if (!filtered.length) {
+    c.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No devices match your search</div></div>`;
+    return;
+  }
+
+  c.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">${filtered.length} device(s) — showing up to 30</div>
+    ${filtered.slice(0,30).map(d => renderDeviceCard(d)).join('')}`;
+}
+
+function showAll() {
+  document.getElementById('tl-search').value = '';
+  document.getElementById('tl-agency').value = '';
+  loadTimeline();
+}
+
+function renderDeviceCard(d) {
+  const sc = d.status==='Retrieved' ? 'badge-retrieved' : d.isDelayed ? 'badge-delayed' : 'badge-waiting';
+  const daysLeft = Math.ceil((new Date(d.expectedReturn)-TODAY)/86400000);
+
+  return `<div class="card" style="margin-bottom:14px;">
+    <div class="card-header">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--navy);">${d.id}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+          ${d.agency} &nbsp;·&nbsp; ${d.dest} &nbsp;·&nbsp; ${regBadge(d.regime)}
+          ${d.isDelayed ? ` &nbsp;·&nbsp; <span style="color:var(--red);font-weight:700;">🔴 ${d.daysOverdue} days overdue</span>` : ''}
+          ${!d.isDelayed && daysLeft >= 0 && daysLeft <= 5 && d.status!=='Retrieved' ? ` &nbsp;·&nbsp; <span style="color:#d97706;font-weight:700;">📅 Due in ${daysLeft}d</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="badge ${sc}">${d.status}</span>
+        ${d.retrievalOfficer ? `<span style="font-size:11px;color:var(--text-muted);">👤 ${d.retrievalOfficer}</span>` : ''}
+      </div>
+    </div>
+    <div style="padding:8px 0;">
+      ${(d.auditLog||[]).map((e,i,arr) => `
+        <div class="timeline-item" style="${i===arr.length-1?'':''}">
+          <div style="display:flex;flex-direction:column;align-items:center;width:24px;flex-shrink:0;padding-top:13px;position:relative;">
+            <div class="tl-dot" style="background:${e.color};position:relative;z-index:1;"></div>
+            ${i<arr.length-1 ? `<div style="width:2px;flex:1;background:var(--border);margin-top:4px;"></div>` : ''}
+          </div>
+          <div class="tl-body">
+            <div class="tl-event">${e.event}</div>
+            <div class="tl-detail">${e.detail}</div>
+            <div class="tl-time">📅 ${e.time}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="padding:12px 20px;background:var(--bg);border-top:1px solid var(--border);display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);">
+      <span>📅 Issued: <strong>${fmtDateShort(d.issued)}</strong></span>
+      <span>⏰ Expected: <strong>${fmtDateShort(d.expectedReturn)}</strong></span>
+      ${d.fieldConfirmed?`<span style="color:#007a67;">✅ Field confirmed by ${d.fieldConfirmedBy}</span>`:`<span style="color:#d97706;">⏳ Awaiting confirmation</span>`}
+      ${d.retrievalTime?`<span style="color:#007a67;">📦 Retrieved ${timeAgo(d.retrievalTime)}</span>`:''}
+    </div>
+  </div>`;
+}
+</script>
+</body>
+</html>

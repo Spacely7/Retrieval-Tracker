@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retrieval Track — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f1a3c; --accent:#00c5a3; --red:#e84040; --text:#1a1f36; --muted:#6b7494;
+  --border:#dde1ef; --bg:#eef1f8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);min-height:100vh;display:flex;-webkit-font-smoothing:antialiased;}
+.split{display:flex;width:100%;min-height:100vh;}
+
+/* LEFT PANEL */
+.left{
+  flex:1.1;background:var(--navy);
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
+  padding:60px;position:relative;overflow:hidden;
+}
+.left::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 30% 60%,rgba(0,197,163,.18) 0%,transparent 60%),
+    radial-gradient(ellipse 40% 60% at 80% 20%,rgba(36,53,119,.5) 0%,transparent 60%);
+}
+.left-content{position:relative;z-index:1;}
+.brand{display:flex;align-items:center;gap:14px;margin-bottom:56px;}
+.brand-icon{
+  width:50px;height:50px;border-radius:14px;
+  background:linear-gradient(135deg,var(--accent),#007a67);
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  box-shadow:0 8px 24px rgba(0,197,163,.3);
+}
+.brand-name{font-family:'Syne',sans-serif;font-weight:800;color:#fff;font-size:20px;}
+.brand-sub{color:rgba(255,255,255,.4);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-top:1px;}
+.hero-title{
+  font-family:'Syne',sans-serif;font-weight:800;
+  color:#fff;font-size:42px;line-height:1.1;margin-bottom:18px;
+  max-width:420px;
+}
+.hero-title span{color:var(--accent);}
+.hero-desc{color:rgba(255,255,255,.55);font-size:14px;line-height:1.7;max-width:380px;margin-bottom:48px;}
+
+.feature-list{display:flex;flex-direction:column;gap:16px;}
+.feature{display:flex;align-items:flex-start;gap:14px;}
+.feature-icon{
+  width:36px;height:36px;border-radius:9px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.fi-green{background:rgba(0,197,163,.15);}
+.fi-orange{background:rgba(240,131,58,.15);}
+.fi-blue{background:rgba(100,140,255,.15);}
+.feature-text strong{color:#fff;font-size:13px;display:block;font-weight:600;}
+.feature-text span{color:rgba(255,255,255,.45);font-size:12px;}
+
+.left-foot{
+  position:absolute;bottom:32px;left:60px;
+  color:rgba(255,255,255,.2);font-size:11px;
+}
+
+/* DECORATIVE CIRCLES */
+.circle{
+  position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.06);
+}
+.c1{width:400px;height:400px;top:-120px;right:-150px;}
+.c2{width:260px;height:260px;bottom:-80px;right:-40px;}
+.c3{width:150px;height:150px;bottom:80px;left:-50px;}
+
+/* RIGHT PANEL */
+.right{
+  width:480px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  padding:40px;background:#fff;
+}
+.login-box{width:100%;max-width:380px;}
+.login-header{margin-bottom:32px;}
+.login-title{font-family:'Syne',sans-serif;font-weight:800;font-size:26px;color:var(--text);margin-bottom:6px;}
+.login-sub{color:var(--muted);font-size:13px;line-height:1.6;}
+
+.form-group{margin-bottom:16px;}
+.form-label{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px;}
+.input-wrap{position:relative;}
+.input-wrap input{
+  width:100%;padding:11px 14px 11px 42px;
+  border:1.5px solid var(--border);border-radius:11px;
+  font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);
+  background:#fff;outline:none;transition:border .16s,box-shadow .16s;
+}
+.input-wrap input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,197,163,.12);}
+.input-icon{
+  position:absolute;left:13px;top:50%;transform:translateY(-50%);
+  font-size:15px;color:var(--muted);pointer-events:none;
+}
+.toggle-pw{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;
+  font-size:14px;color:var(--muted);padding:3px;
+  transition:color .16s;
+}
+.toggle-pw:hover{color:var(--text);}
+
+.error-msg{
+  background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);
+  color:var(--red);border-radius:9px;padding:10px 13px;
+  font-size:12px;font-weight:600;margin-bottom:16px;display:none;
+  align-items:center;gap:7px;
+}
+.error-msg.show{display:flex;}
+
+.btn-login{
+  width:100%;padding:13px;border-radius:11px;border:none;
+  background:var(--navy);color:#fff;
+  font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .16s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:8px;
+}
+.btn-login:hover{background:#1a2b5c;transform:translateY(-1px);box-shadow:0 8px 20px rgba(15,26,60,.2);}
+.btn-login:active{transform:translateY(0);}
+.btn-login .spinner{
+  width:16px;height:16px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none;
+}
+.btn-login.loading .spinner{display:inline-block;}
+.btn-login.loading .btn-text{display:none;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.quick-login{margin-top:28px;}
+.ql-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:12px;}
+.ql-grid{display:flex;flex-direction:column;gap:7px;}
+.ql-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 12px;border:1.5px solid var(--border);border-radius:9px;
+  background:#fafafa;cursor:pointer;transition:all .14s;font-size:12px;
+}
+.ql-btn:hover{border-color:var(--accent);background:rgba(0,197,163,.04);}
+.ql-avatar{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:800;font-size:10px;flex-shrink:0;
+}
+.ql-name{font-weight:700;color:var(--text);}
+.ql-role{color:var(--muted);font-size:11px;}
+.ql-arrow{margin-left:auto;color:var(--muted);}
+
+.divider{
+  display:flex;align-items:center;gap:12px;
+  margin:20px 0;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+@media(max-width:900px){.left{display:none;}.right{width:100%;background:var(--bg);}.login-box{max-width:420px;}}
+</style>
+</head>
+<body>
+<script src="db.js"></script>
+
+<div class="split">
+  <!-- LEFT: BRANDING -->
+  <div class="left">
+    <div class="circle c1"></div>
+    <div class="circle c2"></div>
+    <div class="circle c3"></div>
+    <div class="left-content">
+      <div class="brand">
+        <div class="brand-icon">📦</div>
+        <div>
+          <div class="brand-name">Retrieval Track</div>
+          <div class="brand-sub">Port Device Management</div>
+        </div>
+      </div>
+      <div class="hero-title">Track. Confirm.<br><span>Retrieve.</span></div>
+      <div class="hero-desc">A complete port device operations platform — from issuance to field confirmation to retrieval, with real-time SLA monitoring.</div>
+      <div class="feature-list">
+        <div class="feature">
+          <div class="feature-icon fi-green">✅</div>
+          <div class="feature-text"><strong>Field Confirmation Workflow</strong><span>Two-step verification before any device enters retrieval queue</span></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon fi-orange">⚠️</div>
+          <div class="feature-text"><strong>Automated SLA Monitoring</strong><span>Auto-flag overdue devices by regime-specific thresholds</span></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon fi-blue">📊</div>
+          <div class="feature-text"><strong>Officer Performance Analytics</strong><span>Track retrieval rates, delays, and scorecard per officer</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="left-foot">© 2026 Retrieval Track · Port Operations System</div>
+  </div>
+
+  <!-- RIGHT: LOGIN FORM -->
+  <div class="right">
+    <div class="login-box">
+      <div class="login-header">
+        <div class="login-title">Welcome back 👋</div>
+        <div class="login-sub">Sign in to access the port device management system. Your dashboard awaits.</div>
+      </div>
+
+      <div class="error-msg" id="error-msg">❌ <span id="error-text">Invalid username or password.</span></div>
+
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <div class="input-wrap">
+          <span class="input-icon">👤</span>
+          <input type="text" id="username" placeholder="e.g. admin" autocomplete="username" onkeydown="if(event.key==='Enter')login()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <div class="input-wrap">
+          <span class="input-icon">🔒</span>
+          <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
+          <button class="toggle-pw" type="button" onclick="togglePw()" title="Show/hide password" id="pw-eye">👁️</button>
+        </div>
+      </div>
+
+      <button class="btn-login" id="login-btn" onclick="login()">
+        <span class="btn-text">Sign In →</span>
+        <div class="spinner"></div>
+      </button>
+
+      <div class="divider">Quick Access</div>
+
+      <div class="quick-login">
+        <div class="ql-title">Demo Accounts</div>
+        <div class="ql-grid">
+          <button class="ql-btn" onclick="quickLogin('admin','admin123')">
+            <div class="ql-avatar" style="background:#1e3a5f">AD</div>
+            <div><div class="ql-name">Admin User</div><div class="ql-role">Administrator · Full Access</div></div>
+            <span class="ql-arrow">→</span>
+          </button>
+          <button class="ql-btn" onclick="quickLogin('ama.owusu','sup123')">
+            <div class="ql-avatar" style="background:#dc2626">AO</div>
+            <div><div class="ql-name">Ama Owusu</div><div class="ql-role">Supervisor</div></div>
+            <span class="ql-arrow">→</span>
+          </button>
+          <button class="ql-btn" onclick="quickLogin('yaw.boateng','ret123')">
+            <div class="ql-avatar" style="background:#1a2b5c">YB</div>
+            <div><div class="ql-name">Yaw Boateng</div><div class="ql-role">Retrieval Officer</div></div>
+            <span class="ql-arrow">→</span>
+          </button>
+          <button class="ql-btn" onclick="quickLogin('elias.brown','field123')">
+            <div class="ql-avatar" style="background:#b45309">EB</div>
+            <div><div class="ql-name">Elias Brown</div><div class="ql-role">Field Officer</div></div>
+            <span class="ql-arrow">→</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// Clear any stale session on login page load
+// (only clear if directed here deliberately)
+if (window.location.search.includes('logout')) DB.clearSession();
+
+// If already logged in, redirect to dashboard
+const s = DB.getSession();
+if (s) window.location.href = 'dashboard.html';
+
+function togglePw() {
+  const inp = document.getElementById('password');
+  const eye = document.getElementById('pw-eye');
+  if (inp.type === 'password') { inp.type = 'text'; eye.textContent = '🙈'; }
+  else { inp.type = 'password'; eye.textContent = '👁️'; }
+}
+
+function showError(msg) {
+  document.getElementById('error-text').textContent = msg;
+  document.getElementById('error-msg').classList.add('show');
+}
+function hideError() { document.getElementById('error-msg').classList.remove('show'); }
+
+function login() {
+  hideError();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) { showError('Please enter username and password.'); return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  setTimeout(() => {
+    const user = DB.getUserByCredentials(username, password);
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    if (!user) { showError('Invalid username or password.'); return; }
+    DB.setSession(user);
+    DB.logAudit('Login', `User signed in`, user);
+    window.location.href = 'dashboard.html';
+  }, 600); // Simulated auth delay
+}
+
+function quickLogin(username, password) {
+  document.getElementById('username').value = username;
+  document.getElementById('password').value = password;
+  hideError();
+  login();
+}
+</script>
+</body>
+</html>

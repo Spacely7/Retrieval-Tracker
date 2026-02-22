@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notifications — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">🔔 Notifications</div>
+      <div class="topbar-actions">
+        <button class="btn btn-outline btn-sm" onclick="markAll()">✓ Mark all read</button>
+        <button class="btn btn-primary btn-sm" onclick="openAssign()">📤 Assign Retrieval</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div><div class="page-title">Notifications</div><div class="page-desc">Alerts, assignments, and upcoming retrieval reminders.</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;gap:3px;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:3px;" id="notif-tabs">
+          <button class="ntab active" onclick="setTab('all',this)">All</button>
+          <button class="ntab" onclick="setTab('assignment',this)">Assignments</button>
+          <button class="ntab" onclick="setTab('upcoming',this)">Upcoming</button>
+          <button class="ntab" onclick="setTab('delayed',this)">Alerts</button>
+        </div>
+        <span id="notif-count-lbl" style="font-size:12px;color:var(--text-muted);"></span>
+      </div>
+      <div class="card" id="notif-list-card"><div id="notif-list"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Modal -->
+<div class="modal-overlay" id="assign-modal" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">📤 Assign Retrieval to Officer</div>
+    <div class="modal-sub">Send an assignment notification to a retrieval officer.</div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Agency</label>
+      <select class="form-select" id="am-agency">
+        <option value="">Select agency</option>
+        <option>COMPASS POWER AFRICA LTD</option><option>KOMENDA SUGAR FACTORY</option>
+        <option>RONOR MOTORS</option><option>WEB HELP GHANA</option><option>DAILY FOOD</option>
+        <option>WESTERN BEVERAGES LTD</option><option>CAVE AND GARDEN</option>
+        <option>GLOBAL POLY GHANA</option><option>MIRO TIMBER</option><option>KING RECYCLING SOLUTIONS LTD</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Scheduled Date</label><input type="date" class="form-input" id="am-date"></div>
+    <div class="form-group" style="margin-bottom:16px;"><label class="form-label">Priority</label>
+      <select class="form-select" id="am-priority"><option>Normal</option><option>Urgent</option><option>High</option><option>Low</option></select>
+    </div>
+    <label class="form-label" style="display:block;margin-bottom:9px;">Select Officer</label>
+    <div id="am-officers">
+      <div class="assign-off" onclick="pickOff(this,'Yaw Boateng','YB','#1a2b5c')">
+        <div style="width:34px;height:34px;border-radius:50%;background:#1a2b5c;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex-shrink:0;">YB</div>
+        <div><div style="font-weight:700;font-size:13px;">Yaw Boateng</div><div style="font-size:11px;color:var(--text-muted);">+233 597 563 674</div></div>
+      </div>
+      <div class="assign-off" onclick="pickOff(this,'Kojo Rexford','KR','#007a67')">
+        <div style="width:34px;height:34px;border-radius:50%;background:#007a67;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex-shrink:0;">KR</div>
+        <div><div style="font-weight:700;font-size:13px;">Kojo Rexford</div><div style="font-size:11px;color:var(--text-muted);">+233 206 748 677</div></div>
+      </div>
+      <div class="assign-off" onclick="pickOff(this,'Elias Brown','EB','#b45309')">
+        <div style="width:34px;height:34px;border-radius:50%;background:#b45309;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex-shrink:0;">EB</div>
+        <div><div style="font-weight:700;font-size:13px;">Elias Brown</div><div style="font-size:11px;color:var(--text-muted);">+233 244 675 874</div></div>
+      </div>
+      <div class="assign-off" onclick="pickOff(this,'Kofi Brew','KB','#6d28d9')">
+        <div style="width:34px;height:34px;border-radius:50%;background:#6d28d9;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex-shrink:0;">KB</div>
+        <div><div style="font-weight:700;font-size:13px;">Kofi Brew</div><div style="font-size:11px;color:var(--text-muted);">+233 509 765 467</div></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="sendAssignment()">📤 Send Assignment</button>
+      <button class="btn btn-outline" onclick="closeModal('assign-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.ntab { padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; transition:all .16s; border:none; background:none; color:var(--text-muted); }
+.ntab.active { background:var(--navy); color:#fff; }
+.assign-off { display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all .16s;margin-bottom:7px; }
+.assign-off:hover,.assign-off.picked { border-color:var(--accent);background:rgba(0,197,163,.05); }
+</style>
+
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('notifications');
+let activeTab = 'all';
+let pickedOfficer = null;
+
+if (session) {
+  document.getElementById('am-date').value = fmtISO(addDays(TODAY,1));
+  render();
+}
+
+function setTab(tab, el) {
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  activeTab = tab;
+  render();
+}
+
+function render() {
+  let notifs = DB.getNotifications();
+  if (activeTab !== 'all') notifs = notifs.filter(n => n.tag === activeTab || n.type === activeTab);
+
+  document.getElementById('notif-count-lbl').textContent = notifs.length + ' notification' + (notifs.length!==1?'s':'');
+
+  const icons = { assign:'📤', upcoming:'📅', delayed:'⏰', retrieved:'✅', incomplete:'⚠️' };
+  const niClass = { assign:'ni-assign', upcoming:'ni-upcoming', delayed:'ni-delayed', retrieved:'ni-retrieved', incomplete:'ni-incomplete' };
+
+  document.getElementById('notif-list').innerHTML = notifs.length
+    ? notifs.map(n => `
+      <div class="notif-item${n.unread?' unread':''}" onclick="markRead('${n.id}')">
+        <div class="notif-icon-wrap ${niClass[n.type]||'ni-assign'}">${icons[n.type]||'🔔'}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="notif-title">${n.title}</div>
+          <div class="notif-desc">${n.desc}</div>
+          ${n.extra?`<div class="notif-extra">${n.extra}</div>`:''}
+          <div style="display:flex;align-items:center;gap:9px;margin-top:7px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:var(--text-muted);">🕐 ${timeAgo(n.createdAt)}</span>
+            <span class="ntag ntag-${n.tag==='assignment'?'assign':n.tag||'assign'}">${n.tag||'alert'}</span>
+            ${n.officer?`<span style="font-size:10px;color:var(--text-muted);">👤 ${n.officer}</span>`:''}
+          </div>
+        </div>
+        ${n.unread?`<div class="notif-unread-dot"></div>`:''}
+      </div>`).join('')
+    : `<div class="empty-state"><div class="empty-icon">🔕</div><div class="empty-title">No notifications in this category</div></div>`;
+}
+
+function markRead(id) {
+  DB.markRead(id);
+  render();
+  renderSidebar('notifications');
+}
+
+function markAll() {
+  DB.markAllRead();
+  render();
+  renderSidebar('notifications');
+  showToast('All marked as read', 'success');
+}
+
+function openAssign() {
+  document.querySelectorAll('.assign-off').forEach(e=>e.classList.remove('picked'));
+  pickedOfficer = null;
+  openModal('assign-modal');
+}
+
+function pickOff(el, name) {
+  document.querySelectorAll('.assign-off').forEach(e=>e.classList.remove('picked'));
+  el.classList.add('picked');
+  pickedOfficer = name;
+}
+
+function sendAssignment() {
+  const agency   = document.getElementById('am-agency').value;
+  const date     = document.getElementById('am-date').value;
+  const priority = document.getElementById('am-priority').value;
+  if (!pickedOfficer) { showToast('Select an officer', 'error'); return; }
+  if (!agency)        { showToast('Select an agency', 'error'); return; }
+  DB.addNotification({
+    type:'assign', title:`Assignment – ${pickedOfficer}`,
+    desc:`${pickedOfficer} assigned to retrieve from ${agency} on ${fmtDateShort(date)}.`,
+    officer:pickedOfficer, agency, tag:'assignment',
+    extra:`Priority: ${priority} · Date: ${fmtDateShort(date)}`,
+  });
+  DB.logAudit('Assign Retrieval', `${pickedOfficer} assigned to ${agency}`, session);
+  closeModal('assign-modal');
+  showToast(`✅ Assignment sent to ${pickedOfficer}`, 'success');
+  render();
+  renderSidebar('notifications');
+}
+</script>
+</body>
+</html>

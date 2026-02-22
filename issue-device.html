@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Issue Device — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">📤 Issue Device</div>
+      <div class="topbar-actions">
+        <a href="notifications.html" class="btn btn-outline btn-sm">🔔 Send Alert</a>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Issue Device to Officer</div>
+          <div class="page-desc">Record device issuances and log incomplete pickup reasons.</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:26px;margin-bottom:18px;">
+        <div class="card-title" style="margin-bottom:18px;">📋 Issuance Details</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Retrieval Officer</label>
+            <select class="form-select" id="issue-officer" onchange="onOfficerChange()">
+              <option value="">Select officer</option>
+              <option>Yaw Boateng</option>
+              <option>Kojo Rexford</option>
+              <option>Elias Brown</option>
+              <option>Kofi Brew</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Officer Phone</label>
+            <input class="form-input" id="issue-phone" readonly placeholder="Auto-populated">
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">Agency Name</label>
+            <select class="form-select" id="issue-agency" onchange="onAgencyChange()">
+              <option value="">Select agency</option>
+              <option>COMPASS POWER AFRICA LTD</option>
+              <option>KOMENDA SUGAR FACTORY</option>
+              <option>RONOR MOTORS</option>
+              <option>WEB HELP GHANA</option>
+              <option>DAILY FOOD</option>
+              <option>WESTERN BEVERAGES LTD</option>
+              <option>CAVE AND GARDEN</option>
+              <option>GLOBAL POLY GHANA</option>
+              <option>MIRO TIMBER</option>
+              <option>KING RECYCLING SOLUTIONS LTD</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Devices Available</label>
+            <input class="form-input" id="issue-qty" type="number" readonly placeholder="Auto-populated">
+            <span class="form-hint">Field-confirmed devices for this agency</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Devices Collected</label>
+            <input class="form-input" id="issue-collected" type="number" min="1" placeholder="e.g. 5" oninput="calcPending()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pending Retrieval</label>
+            <input class="form-input" id="issue-pending" type="number" readonly value="0">
+            <span class="form-hint">Available − Collected</span>
+          </div>
+        </div>
+
+        <!-- INCOMPLETE REASON -->
+        <div class="reason-section" id="reason-section">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:#8a4000;margin-bottom:10px;">⚠️ Reason for Incomplete Pickup</div>
+          <p style="font-size:12px;color:#7a5000;margin-bottom:12px;">Officer collected fewer devices than available. Please select a reason:</p>
+          <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;" id="reason-tags">
+            <span class="reason-tag" onclick="pickReason(this,'Device not accessible at location')">📍 Not accessible</span>
+            <span class="reason-tag" onclick="pickReason(this,'Insufficient vehicle capacity')">🚛 Vehicle capacity</span>
+            <span class="reason-tag" onclick="pickReason(this,'Agency site was closed')">🔒 Site closed</span>
+            <span class="reason-tag" onclick="pickReason(this,'Security clearance denied')">🛡️ Security denied</span>
+            <span class="reason-tag" onclick="pickReason(this,'Device damaged / not retrievable')">⚠️ Damaged device</span>
+            <span class="reason-tag" onclick="pickReason(this,'Road or weather conditions')">🌧️ Road/weather</span>
+            <span class="reason-tag" onclick="pickReason(this,'Time constraints')">⏰ Time constraints</span>
+            <span class="reason-tag" onclick="pickReason(this,'Device location mismatch')">🗺️ Location mismatch</span>
+            <span class="reason-tag" onclick="pickReason(this,'Other reason')">✏️ Other</span>
+          </div>
+          <textarea class="form-textarea" id="reason-text" placeholder="Add additional details (optional)..." maxlength="300" oninput="document.getElementById('reason-char').textContent=this.value.length+'/300'"></textarea>
+          <div style="font-size:10px;color:var(--text-muted);text-align:right;margin-top:3px;" id="reason-char">0/300</div>
+        </div>
+
+        <div style="margin-top:20px;display:flex;gap:9px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="recordIssuance()">📝 Record Issuance</button>
+          <button class="btn btn-outline" onclick="resetForm()">↺ Reset Form</button>
+        </div>
+      </div>
+
+      <!-- ISSUANCE LOG -->
+      <div class="card" id="log-card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title">📋 Today's Issuance Log</div>
+          <div style="display:flex;gap:8px;">
+            <span id="log-count" style="font-size:12px;color:var(--text-muted);align-self:center;"></span>
+            <button class="btn btn-outline btn-sm" onclick="clearLog()">🗑️ Clear</button>
+          </div>
+        </div>
+        <div id="log-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('issue');
+let selectedReason = '';
+
+if (session) {
+  loadLog();
+}
+
+function onOfficerChange() {
+  const o = document.getElementById('issue-officer').value;
+  document.getElementById('issue-phone').value = o && OFFICERS_DATA[o] ? '+' + OFFICERS_DATA[o].phone : '';
+}
+
+function onAgencyChange() {
+  const agency = document.getElementById('issue-agency').value;
+  if (!agency) { document.getElementById('issue-qty').value = ''; calcPending(); return; }
+  const qty = DB.getDevices().filter(d =>
+    d.agency === agency && d.fieldConfirmed && d.status === 'Awaiting Retrieval' && !d.isDelayed
+  ).length;
+  document.getElementById('issue-qty').value = qty;
+  calcPending();
+}
+
+function calcPending() {
+  const qty = parseInt(document.getElementById('issue-qty').value) || 0;
+  const col = parseInt(document.getElementById('issue-collected').value) || 0;
+  const pending = Math.max(0, qty - col);
+  document.getElementById('issue-pending').value = pending;
+  const sec = document.getElementById('reason-section');
+  if (col > 0 && pending > 0) sec.classList.add('visible');
+  else {
+    sec.classList.remove('visible');
+    resetReason();
+  }
+}
+
+function pickReason(el, reason) {
+  document.querySelectorAll('.reason-tag').forEach(t => t.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedReason = reason;
+}
+
+function resetReason() {
+  selectedReason = '';
+  document.querySelectorAll('.reason-tag').forEach(t => t.classList.remove('selected'));
+  const rt = document.getElementById('reason-text');
+  if (rt) { rt.value = ''; document.getElementById('reason-char').textContent = '0/300'; }
+}
+
+function resetForm() {
+  document.getElementById('issue-officer').value = '';
+  document.getElementById('issue-agency').value = '';
+  document.getElementById('issue-phone').value = '';
+  document.getElementById('issue-qty').value = '';
+  document.getElementById('issue-collected').value = '';
+  document.getElementById('issue-pending').value = '0';
+  document.getElementById('reason-section').classList.remove('visible');
+  resetReason();
+}
+
+function recordIssuance() {
+  const officerName = document.getElementById('issue-officer').value;
+  const agency      = document.getElementById('issue-agency').value;
+  const qty         = parseInt(document.getElementById('issue-qty').value) || 0;
+  const col         = parseInt(document.getElementById('issue-collected').value) || 0;
+  const pending     = qty - col;
+  const customNote  = document.getElementById('reason-text').value.trim();
+  const fullReason  = [selectedReason, customNote].filter(Boolean).join(' – ') || null;
+
+  if (!officerName) { showToast('Select a retrieval officer', 'error'); return; }
+  if (!agency)      { showToast('Select an agency', 'error'); return; }
+  if (!col)         { showToast('Enter number of collected devices', 'error'); return; }
+  if (col > qty)    { showToast('Cannot exceed available quantity', 'error'); return; }
+  if (pending > 0 && !fullReason) { showToast('Please select a reason for incomplete pickup', 'error'); return; }
+
+  const rec = DB.addIssuance({
+    officerName, officerPhone: OFFICERS_DATA[officerName]?.phone || '',
+    agency, qty, collected: col, pending, reason: fullReason,
+    recordedBy: session.name,
+  });
+
+  DB.addNotification({
+    type: 'assign',
+    title: `Assignment – ${officerName}`,
+    desc: `${officerName} collected ${col} device(s) from ${agency}. ${pending>0?pending+' device(s) remain pending.':'All collected.'}`,
+    officer: officerName, agency, tag: 'assignment',
+    extra: fullReason ? `⚠️ Incomplete reason: ${fullReason}` : null,
+  });
+
+  DB.logAudit('Issue Device', `${col} devices issued from ${agency} to ${officerName}`, session);
+  showToast(`✅ Issuance recorded for ${officerName}`, 'success');
+  resetForm();
+  loadLog();
+}
+
+function loadLog() {
+  const all = DB.getIssuances().filter(i => i.recordedBy === session.name || session.role === 'Administrator' || session.role === 'Supervisor');
+  const card = document.getElementById('log-card');
+  if (!all.length) { card.style.display='none'; return; }
+  card.style.display = 'block';
+  document.getElementById('log-count').textContent = all.length + ' record(s)';
+  document.getElementById('log-list').innerHTML = all.slice().reverse().slice(0,20).map(i => {
+    const oColor = OFFICERS_DATA[i.officerName]?.color || '#1e3a5f';
+    const oInit  = i.officerName?.split(' ').map(w=>w[0]).join('').slice(0,2) || '??';
+    return `<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);">
+      <div style="width:36px;height:36px;border-radius:50%;background:${oColor};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;flex-shrink:0;">${oInit}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:13px;">${i.officerName} → <span style="color:var(--navy);">${i.agency}</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+          Collected: <strong>${i.collected}</strong> &nbsp;·&nbsp; Available: <strong>${i.qty}</strong> &nbsp;·&nbsp;
+          Pending: <strong style="color:${i.pending>0?'var(--red)':'var(--accent)'}">${i.pending}</strong>
+          &nbsp;·&nbsp; By: ${i.recordedBy}
+        </div>
+        ${i.reason ? `<div style="margin-top:6px;padding:6px 10px;border-radius:7px;background:#fff8f0;border:1px solid #f5e0c0;font-size:11px;color:#7a4000;">⚠️ ${i.reason}</div>` : ''}
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${timeAgo(i.createdAt)}</div>
+    </div>`;
+  }).join('');
+}
+
+function clearLog() {
+  if (!confirm('Clear the issuance log display? (Data is preserved in the database)')) return;
+  document.getElementById('log-card').style.display='none';
+}
+</script>
+</body>
+</html>

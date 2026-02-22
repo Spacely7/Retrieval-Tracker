@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delayed Devices — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">⚠️ Delayed Devices</div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="load()">🔄</button>
+        <button class="btn btn-danger btn-sm" id="del-btn" onclick="openRetrieveModal()" disabled>📦 Retrieve (<span id="del-count">0</span>)</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">⚠️ Delayed Devices</div>
+          <div class="page-desc">Devices overdue per their regime's SLA threshold. Auto-escalated from Retrieval queue.</div>
+        </div>
+        <div class="header-actions">
+          <span id="del-summary" style="font-size:12px;color:var(--red);font-weight:600;"></span>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="del-search" placeholder="Search Device ID, Agency, Regime..." oninput="load()"></div>
+        <select class="filter-select" id="del-regime" onchange="load()">
+          <option value="">All Regimes</option>
+          <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+        </select>
+        <select class="filter-select" id="del-agency" onchange="load()">
+          <option value="">All Agencies</option>
+          <option>COMPASS POWER AFRICA LTD</option><option>KOMENDA SUGAR FACTORY</option>
+          <option>RONOR MOTORS</option><option>WEB HELP GHANA</option><option>DAILY FOOD</option>
+          <option>WESTERN BEVERAGES LTD</option><option>CAVE AND GARDEN</option>
+          <option>GLOBAL POLY GHANA</option><option>MIRO TIMBER</option><option>KING RECYCLING SOLUTIONS LTD</option>
+        </select>
+        <select class="filter-select" id="del-fc" onchange="load()">
+          <option value="">All Confirmation Status</option>
+          <option value="confirmed">Field Confirmed</option>
+          <option value="unconfirmed">Unconfirmed</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="select-all-bar">
+          <input type="checkbox" id="del-all" onchange="toggleAll()">
+          <label for="del-all" style="cursor:pointer;">Select All</label>
+          <span class="selected-count" id="del-sel-lbl"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>Device ID</th><th>Date Issued</th><th>Expected Return</th><th>Days Overdue</th><th>Field Confirmed</th><th>Agency</th><th>Destination</th><th>Regime</th></tr>
+            </thead>
+            <tbody id="del-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="del-info"></span>
+          <div class="page-btns" id="del-pages"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Retrieve Modal -->
+<div class="modal-overlay" id="retrieve-modal" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">📦 Retrieve Delayed Devices</div>
+    <div class="modal-sub">Mark selected delayed devices as retrieved.</div>
+    <div style="background:#fff0f0;border:1px solid rgba(232,64,64,.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;" id="retrieve-summary"></div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Retrieval Officer</label>
+      <select class="form-select" id="rm-officer">
+        <option value="">Select officer</option>
+        <option>Yaw Boateng</option><option>Kojo Rexford</option><option>Elias Brown</option><option>Kofi Brew</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Escalation Resolution Notes</label>
+      <textarea class="form-textarea" id="rm-notes" placeholder="Describe how the delay was resolved..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="submitRetrieve()">✅ Mark Retrieved</button>
+      <button class="btn btn-outline" onclick="closeModal('retrieve-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('delayed');
+let curPage = 1;
+
+if (session) load();
+
+function getFiltered() {
+  const search = (document.getElementById('del-search')?.value||'').toLowerCase();
+  const regime = document.getElementById('del-regime')?.value||'';
+  const agency = document.getElementById('del-agency')?.value||'';
+  const fc     = document.getElementById('del-fc')?.value||'';
+  return DB.getDevices().filter(d => {
+    if (!d.isDelayed || d.status === 'Retrieved') return false;
+    if (regime && d.regime !== regime) return false;
+    if (agency && d.agency !== agency) return false;
+    if (fc === 'confirmed' && !d.fieldConfirmed) return false;
+    if (fc === 'unconfirmed' && d.fieldConfirmed) return false;
+    if (search && !d.id.toLowerCase().includes(search) && !d.agency.toLowerCase().includes(search) && !d.regime.toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function load(page) {
+  if (page) curPage = page;
+  const filtered = getFiltered();
+  const total = filtered.length;
+  const sla = DB.getSLA();
+  document.getElementById('del-summary').textContent = total > 0 ? `${total} device(s) require immediate action` : '';
+
+  const start = (curPage-1)*10;
+  const pg = filtered.slice(start, start+10);
+  document.getElementById('del-body').innerHTML = pg.length
+    ? pg.map(d => `
+      <tr>
+        <td><input type="checkbox" class="del-cb" value="${d.id}" onchange="updSel()"></td>
+        <td><a class="td-id" href="timeline.html?id=${d.id}">${d.id}</a></td>
+        <td class="td-muted">${fmtDateShort(d.issued)}</td>
+        <td class="td-muted">${fmtDateShort(d.expectedReturn)}</td>
+        <td><span class="overdue-badge" title="${d.daysOverdue} days overdue (threshold: ${sla[d.regime]||3} days)">${d.daysOverdue}</span></td>
+        <td>${d.fieldConfirmed?`<span style="color:var(--accent);">✅ ${d.fieldConfirmedBy||''}</span>`:`<span style="color:var(--yellow);">⏳ Pending</span>`}</td>
+        <td>${d.agency}</td>
+        <td class="td-muted">${d.dest}</td>
+        <td>${regBadge(d.regime)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No delayed devices</div><div class="empty-desc">All devices are within SLA thresholds</div></div></td></tr>`;
+
+  document.getElementById('del-all').checked = false;
+  renderPagination('del', total, curPage, 'load');
+  updSel();
+}
+
+function toggleAll() {
+  const checked = document.getElementById('del-all').checked;
+  document.querySelectorAll('.del-cb').forEach(cb => cb.checked = checked);
+  updSel();
+}
+
+function updSel() {
+  const selected = [...document.querySelectorAll('.del-cb:checked')];
+  const count = selected.length;
+  document.getElementById('del-count').textContent = count;
+  document.getElementById('del-btn').disabled = count === 0;
+  document.getElementById('del-sel-lbl').textContent = count > 0 ? count + ' selected' : '';
+}
+
+function openRetrieveModal() {
+  const selected = [...document.querySelectorAll('.del-cb:checked')].map(cb => cb.value);
+  if (!selected.length) return;
+  document.getElementById('retrieve-summary').innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--red);">⚠️ ${selected.length} delayed device(s) selected</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${selected.join(', ')}</div>`;
+  document.getElementById('rm-officer').value = session.role === 'Retrieval Officer' ? session.name : '';
+  openModal('retrieve-modal');
+}
+
+function submitRetrieve() {
+  const officer = document.getElementById('rm-officer').value;
+  const notes   = document.getElementById('rm-notes').value.trim();
+  if (!officer) { showToast('Select retrieval officer', 'error'); return; }
+
+  const selected = [...document.querySelectorAll('.del-cb:checked')].map(cb => cb.value);
+  const ts = new Date().toISOString();
+  selected.forEach(id => {
+    DB.updateDevice(id, { status:'Retrieved', isDelayed:false, retrievalOfficer:officer, retrievalTime:ts });
+    DB.appendAudit(id, { event:'Retrieved (Escalated)', detail:`Delayed device retrieved by ${officer}${notes?' · '+notes:''}`, time:fmtDate(TODAY), color:'#00c5a3' });
+  });
+
+  DB.addNotification({
+    type:'retrieved',
+    title:`${selected.length} Delayed Device(s) Retrieved`,
+    desc:`${officer} resolved ${selected.length} escalated delayed device(s).`,
+    officer, tag:'retrieved',
+  });
+  DB.logAudit('Retrieve Delayed', `${selected.length} delayed devices retrieved by ${officer}`, session);
+  closeModal('retrieve-modal');
+  showToast(`✅ ${selected.length} delayed device(s) retrieved`, 'success');
+  load();
+}
+</script>
+</body>
+</html>

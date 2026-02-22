@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roles & Users — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">🔐 Roles & Users</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" onclick="openAddUser()">+ Add User</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Roles & User Management</div>
+          <div class="page-desc">Manage access levels for administrators, supervisors, and field officers.</div>
+        </div>
+      </div>
+
+      <!-- Role Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:22px;" id="roles-grid"></div>
+
+      <!-- User Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">System Users</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="search-wrap" style="min-width:200px;"><span class="search-icon">🔍</span><input type="text" id="user-search" placeholder="Search users..." oninput="renderUsers()"></div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>User</th><th>Contact</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="user-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Audit Log -->
+      <div class="card" style="margin-top:18px;">
+        <div class="card-header">
+          <div class="card-title">📋 System Audit Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="renderAudit()">🔄</button>
+        </div>
+        <div id="audit-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="add-user-modal" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">+ Add New User</div>
+    <div class="modal-sub">Create a new user account and assign their access role.</div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Full Name</label><input class="form-input" id="nu-name" placeholder="e.g. Kwame Asante"></div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Username</label><input class="form-input" id="nu-username" placeholder="e.g. kwame.asante"></div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Password</label><input class="form-input" type="password" id="nu-password" placeholder="Minimum 6 characters"></div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Phone / Email</label><input class="form-input" id="nu-contact" placeholder="e.g. 233XXXXXXXXX"></div>
+    <div class="form-group" style="margin-bottom:16px;"><label class="form-label">Role</label>
+      <select class="form-select" id="nu-role">
+        <option>Administrator</option><option>Supervisor</option><option>Field Officer</option><option>Retrieval Officer</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="addUser()">Add User</button>
+      <button class="btn btn-outline" onclick="closeModal('add-user-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="edit-user-modal" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit User</div>
+    <div class="modal-sub" id="eu-sub"></div>
+    <input type="hidden" id="eu-id">
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Full Name</label><input class="form-input" id="eu-name"></div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Phone / Email</label><input class="form-input" id="eu-contact"></div>
+    <div class="form-group" style="margin-bottom:12px;"><label class="form-label">Role</label>
+      <select class="form-select" id="eu-role">
+        <option>Administrator</option><option>Supervisor</option><option>Field Officer</option><option>Retrieval Officer</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:16px;"><label class="form-label">New Password (leave blank to keep)</label><input class="form-input" type="password" id="eu-password" placeholder="Leave blank to keep current"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+      <button class="btn btn-outline" onclick="closeModal('edit-user-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('roles');
+if (session) { renderRoles(); renderUsers(); renderAudit(); }
+
+const ROLE_DEFS = [
+  { name:'Administrator', color:'#dc2626', bg:'rgba(220,38,38,.1)',
+    perms:{ Dashboard:true, 'Issue Device':true, 'Field Confirm':true, Retrieval:true, Delayed:true, Reports:true, Analytics:true, Performance:true, 'Roles & SLA':true } },
+  { name:'Supervisor', color:'#1e3a5f', bg:'rgba(30,58,95,.1)',
+    perms:{ Dashboard:true, 'Issue Device':true, 'Field Confirm':true, Retrieval:true, Delayed:true, Reports:true, Analytics:true, Performance:true, 'Roles & SLA':false } },
+  { name:'Retrieval Officer', color:'#007a67', bg:'rgba(0,197,163,.1)',
+    perms:{ Dashboard:true, 'Issue Device':false, 'Field Confirm':false, Retrieval:true, Delayed:true, Reports:false, Analytics:false, Performance:false, 'Roles & SLA':false } },
+  { name:'Field Officer', color:'#b45309', bg:'rgba(180,83,9,.1)',
+    perms:{ Dashboard:true, 'Issue Device':false, 'Field Confirm':true, Retrieval:false, Delayed:false, Reports:false, Analytics:false, Performance:false, 'Roles & SLA':false } },
+];
+
+function renderRoles() {
+  document.getElementById('roles-grid').innerHTML = ROLE_DEFS.map(r => {
+    const users = DB.getUsers().filter(u => u.role === r.name && u.active).length;
+    return `<div class="role-card">
+      <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:800;margin-bottom:10px;background:${r.bg};color:${r.color};">● ${r.name}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">${users} user${users!==1?'s':''}</div>
+      ${Object.entries(r.perms).map(([k,v])=>`
+        <div class="role-perm">
+          <span class="${v?'perm-yes':'perm-no'}">${v?'✓':'✗'}</span> ${k}
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderUsers() {
+  const search = (document.getElementById('user-search')?.value||'').toLowerCase();
+  const users = DB.getUsers().filter(u =>
+    !search || u.name.toLowerCase().includes(search) || u.username.toLowerCase().includes(search) || u.role.toLowerCase().includes(search)
+  );
+  document.getElementById('user-table-body').innerHTML = users.length
+    ? users.map(u => {
+        const init = u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        const canEdit = session.role === 'Administrator' || session.id === u.id;
+        return `<tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:${u.color||'#1e3a5f'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:11px;flex-shrink:0;">${init}</div>
+              <div><div style="font-weight:700;font-size:13px;">${u.name}</div><div style="font-size:11px;color:var(--text-muted);">@${u.username}</div></div>
+            </div>
+          </td>
+          <td class="td-muted">${u.phone||u.contact||'—'}</td>
+          <td>
+            <select class="filter-select" style="padding:5px 9px;min-width:unset;font-size:12px;" onchange="changeRole('${u.id}',this.value)" ${!canEdit||u.id===session.id?'disabled':''}>
+              ${['Administrator','Supervisor','Field Officer','Retrieval Officer'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
+            </select>
+          </td>
+          <td>${u.active?`<span class="badge badge-confirmed">Active</span>`:`<span class="badge badge-delayed">Disabled</span>`}</td>
+          <td class="td-muted">${u.createdAt?fmtDateShort(u.createdAt):'—'}</td>
+          <td>
+            ${canEdit ? `<button class="btn btn-outline btn-xs" onclick="openEdit('${u.id}')">✏️ Edit</button>` : ''}
+            ${session.role==='Administrator'&&u.id!==session.id ? `
+              <button class="btn btn-xs" style="background:${u.active?'rgba(232,64,64,.1)':'rgba(0,197,163,.1)';};color:${u.active?'var(--red)':'#007a67'};margin-left:4px;" onclick="toggleUser('${u.id}')">
+                ${u.active?'Disable':'Enable'}
+              </button>` : ''}
+          </td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👤</div><div class="empty-title">No users found</div></div></td></tr>`;
+}
+
+function renderAudit() {
+  const log = DB.getAuditLog().slice(0,20);
+  document.getElementById('audit-list').innerHTML = log.length
+    ? log.map(e=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border);font-size:12px;">
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--navy);margin-top:5px;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <strong>${e.action}</strong> — ${e.details}
+          <span style="color:var(--text-muted);"> · by ${e.user}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${timeAgo(e.ts)}</div>
+      </div>`).join('')
+    : `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No audit records yet</div></div>`;
+}
+
+function changeRole(id, role) {
+  DB.updateUser(id, { role });
+  DB.logAudit('Change Role', `User ${id} role changed to ${role}`, session);
+  showToast(`Role updated to ${role}`, 'success');
+  renderRoles();
+}
+
+function toggleUser(id) {
+  const user = DB.getUsers().find(u=>u.id===id);
+  if (!user) return;
+  DB.updateUser(id, { active: !user.active });
+  DB.logAudit(user.active?'Disable User':'Enable User', `User ${user.name} ${user.active?'disabled':'enabled'}`, session);
+  showToast(`User ${user.active?'disabled':'enabled'}`, 'info');
+  renderUsers();
+}
+
+function openAddUser() {
+  ['nu-name','nu-username','nu-password','nu-contact'].forEach(id=>document.getElementById(id).value='');
+  openModal('add-user-modal');
+}
+
+function addUser() {
+  const name     = document.getElementById('nu-name').value.trim();
+  const username = document.getElementById('nu-username').value.trim();
+  const password = document.getElementById('nu-password').value;
+  const contact  = document.getElementById('nu-contact').value.trim();
+  const role     = document.getElementById('nu-role').value;
+  if (!name || !username || !password) { showToast('Name, username and password are required', 'error'); return; }
+  if (password.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+  if (DB.getUsers().find(u=>u.username===username)) { showToast('Username already exists', 'error'); return; }
+  const colors = ['#1e3a5f','#007a67','#b45309','#6d28d9','#dc2626'];
+  DB.addUser({ name, username, password, phone:contact, contact, role, color: colors[Math.floor(Math.random()*colors.length)] });
+  DB.logAudit('Add User', `User ${name} (${role}) added`, session);
+  closeModal('add-user-modal');
+  showToast(`✅ User ${name} added`, 'success');
+  renderUsers(); renderRoles();
+}
+
+function openEdit(id) {
+  const user = DB.getUsers().find(u=>u.id===id);
+  if (!user) return;
+  document.getElementById('eu-id').value   = id;
+  document.getElementById('eu-sub').textContent = `Editing: ${user.username}`;
+  document.getElementById('eu-name').value    = user.name;
+  document.getElementById('eu-contact').value = user.phone||user.contact||'';
+  document.getElementById('eu-role').value    = user.role;
+  document.getElementById('eu-password').value = '';
+  openModal('edit-user-modal');
+}
+
+function saveEdit() {
+  const id       = document.getElementById('eu-id').value;
+  const name     = document.getElementById('eu-name').value.trim();
+  const contact  = document.getElementById('eu-contact').value.trim();
+  const role     = document.getElementById('eu-role').value;
+  const password = document.getElementById('eu-password').value;
+  if (!name) { showToast('Name is required', 'error'); return; }
+  const upd = { name, phone:contact, contact, role };
+  if (password) { if (password.length<6){showToast('Password too short','error');return;} upd.password=password; }
+  DB.updateUser(id, upd);
+  DB.logAudit('Edit User', `User ${name} profile updated`, session);
+  closeModal('edit-user-modal');
+  showToast('✅ User updated', 'success');
+  renderUsers(); renderRoles();
+}
+</script>
+</body>
+</html>

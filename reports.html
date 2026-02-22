@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">📋 Reports</div>
+      <div class="topbar-actions">
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇️ Export CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print / PDF</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Device Reports</div>
+          <div class="page-desc">Filterable device records with CSV export and print-ready PDF layout.</div>
+        </div>
+        <div class="header-actions">
+          <input type="date" class="form-input" id="rpt-from" style="width:auto;" onchange="load()">
+          <span style="color:var(--text-muted);padding:0 4px;">→</span>
+          <input type="date" class="form-input" id="rpt-to" style="width:auto;" onchange="load()">
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="rpt-search" placeholder="Search Device ID, Agency, Officer..." oninput="load()"></div>
+        <select class="filter-select" id="rpt-regime" onchange="load()">
+          <option value="">All Regimes</option>
+          <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+        </select>
+        <select class="filter-select" id="rpt-status" onchange="load()">
+          <option value="">All Status</option>
+          <option>Awaiting Retrieval</option><option>Retrieved</option><option>Delayed</option>
+        </select>
+        <select class="filter-select" id="rpt-officer" onchange="load()">
+          <option value="">All Officers</option>
+          <option>Yaw Boateng</option><option>Kojo Rexford</option><option>Elias Brown</option><option>Kofi Brew</option>
+        </select>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="stats-grid" id="rpt-stats" style="margin-bottom:18px;"></div>
+
+      <div class="card" id="print-report-area">
+        <div class="card-header">
+          <div class="card-title">Device Details (Filtered)</div>
+          <span id="rpt-lbl" style="font-size:12px;color:var(--text-muted);"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Device ID</th><th>Date Issued</th><th>Expected Return</th>
+                <th>Field Confirmed</th><th>Agency</th><th>Destination</th>
+                <th>Regime</th><th>Status</th><th>Officer</th><th>Retrieved At</th>
+              </tr>
+            </thead>
+            <tbody id="rpt-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="rpt-info"></span>
+          <div class="page-btns" id="rpt-pages"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('reports');
+let curPage = 1;
+
+if (session) {
+  const from = addDays(TODAY, -30);
+  document.getElementById('rpt-from').value = fmtISO(from);
+  document.getElementById('rpt-to').value   = fmtISO(TODAY);
+  load();
+}
+
+function getFiltered() {
+  const from   = document.getElementById('rpt-from').value;
+  const to     = document.getElementById('rpt-to').value;
+  const search = (document.getElementById('rpt-search')?.value||'').toLowerCase();
+  const regime  = document.getElementById('rpt-regime')?.value||'';
+  const status  = document.getElementById('rpt-status')?.value||'';
+  const officer = document.getElementById('rpt-officer')?.value||'';
+  return DB.getDevices().filter(d => {
+    if (from && d.issued < from) return false;
+    if (to   && d.issued > to)   return false;
+    if (regime && d.regime !== regime) return false;
+    if (status && d.status !== status) return false;
+    if (officer && d.retrievalOfficer !== officer) return false;
+    if (search && !d.id.toLowerCase().includes(search) && !d.agency.toLowerCase().includes(search) && !(d.retrievalOfficer||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function load(page) {
+  if (page) curPage = page;
+  const filtered = getFiltered();
+  const total = filtered.length;
+  document.getElementById('rpt-lbl').textContent = total + ' records';
+
+  // Summary stats
+  const retrieved  = filtered.filter(d=>d.status==='Retrieved').length;
+  const delayed    = filtered.filter(d=>d.isDelayed).length;
+  const awaiting   = filtered.filter(d=>d.status==='Awaiting Retrieval'&&!d.isDelayed).length;
+  const rate       = total ? Math.round(retrieved/total*100) : 0;
+  document.getElementById('rpt-stats').innerHTML = `
+    <div class="stat-card c-navy"><div class="stat-icon">📋</div><div class="stat-value">${total}</div><div class="stat-label">Total Records</div></div>
+    <div class="stat-card c-accent"><div class="stat-icon">✅</div><div class="stat-value">${retrieved}</div><div class="stat-label">Retrieved</div><div class="stat-sub up">↑ ${rate}% rate</div></div>
+    <div class="stat-card c-yellow"><div class="stat-icon">⏳</div><div class="stat-value">${awaiting}</div><div class="stat-label">Awaiting</div></div>
+    <div class="stat-card c-red"><div class="stat-icon">⚠️</div><div class="stat-value">${delayed}</div><div class="stat-label">Delayed</div></div>`;
+
+  const start = (curPage-1)*10;
+  const pg = filtered.slice(start, start+10);
+  document.getElementById('rpt-body').innerHTML = pg.length
+    ? pg.map(d => {
+        const sc = d.status==='Retrieved'?'badge-retrieved':d.isDelayed?'badge-delayed':'badge-waiting';
+        return `<tr>
+          <td><a class="td-id" href="timeline.html?id=${d.id}">${d.id}</a></td>
+          <td class="td-muted">${fmtDateShort(d.issued)}</td>
+          <td class="td-muted">${fmtDateShort(d.expectedReturn)}</td>
+          <td>${d.fieldConfirmed ? `<span style="color:var(--accent);">✅ ${d.fieldConfirmedBy||''}</span>` : `<span style="color:var(--yellow);">⏳</span>`}</td>
+          <td>${d.agency}</td>
+          <td class="td-muted">${d.dest}</td>
+          <td>${regBadge(d.regime)}</td>
+          <td><span class="badge ${sc}">${d.status}</span></td>
+          <td class="td-muted">${d.retrievalOfficer||'—'}</td>
+          <td class="td-muted">${d.retrievalTime ? new Date(d.retrievalTime).toLocaleString() : '—'}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No records for selected filters</div></div></td></tr>`;
+
+  renderPagination('rpt', total, curPage, 'load');
+}
+
+function exportCSV() {
+  const filtered = getFiltered();
+  const headers = ['Device ID','Date Issued','Expected Return','Field Confirmed','Agency','Destination','Regime','Status','Retrieval Officer','Retrieved At'];
+  const rows = filtered.map(d => [
+    d.id, fmtDateShort(d.issued), fmtDateShort(d.expectedReturn),
+    d.fieldConfirmed ? 'Yes' : 'No', d.agency, d.dest, d.regime, d.status,
+    d.retrievalOfficer||'N/A', d.retrievalTime||'N/A'
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = `retrieval-report-${fmtISO(TODAY)}.csv`;
+  a.click();
+  showToast('✅ CSV exported', 'success');
+  DB.logAudit('Export CSV', `${filtered.length} records exported`, session);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Confirmation — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">✅ Field Confirmation</div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="load()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Field Officer Confirmation</div>
+          <div class="page-desc">Field officers confirm device presence on-site. Unconfirmed devices cannot enter the retrieval queue.</div>
+        </div>
+        <div class="header-actions">
+          <span id="fc-summary" style="font-size:12px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="fc-search" placeholder="Search Device ID, Agency, Regime..." oninput="load()"></div>
+        <select class="filter-select" id="fc-regime" onchange="load()">
+          <option value="">All Regimes</option>
+          <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+        </select>
+        <select class="filter-select" id="fc-status" onchange="load()">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Devices Awaiting Confirmation</div>
+          <span id="fc-count" style="font-size:12px;color:var(--text-muted);"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Device ID</th><th>Date Issued</th><th>Agency</th><th>Destination</th>
+                <th>Regime</th><th>Field Status</th><th>Confirmed By</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="fc-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="fc-info"></span>
+          <div class="page-btns" id="fc-pages"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">✅ Confirm Device Presence</div>
+    <div class="modal-sub" id="cm-sub">Confirm that this device is physically present at the site.</div>
+    <div style="background:#f5f7fc;border-radius:10px;padding:14px;margin-bottom:16px;" id="cm-device-info"></div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Confirmed By (Officer Name)</label>
+      <select class="form-select" id="cm-officer">
+        <option value="">Select confirming officer</option>
+        <option>Yaw Boateng</option><option>Kojo Rexford</option><option>Elias Brown</option><option>Kofi Brew</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Location Notes (Optional)</label>
+      <input class="form-input" id="cm-notes" placeholder="e.g. Bay 3, Warehouse C...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-accent" onclick="submitConfirm()">✅ Confirm Device</button>
+      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('fieldconfirm');
+let curPage = 1;
+let confirmingId = null;
+
+if (session) load();
+
+function getFiltered() {
+  const search = (document.getElementById('fc-search')?.value||'').toLowerCase();
+  const regime = document.getElementById('fc-regime')?.value||'';
+  const statusFilter = document.getElementById('fc-status')?.value||'';
+  return DB.getDevices().filter(d => {
+    if (d.status === 'Retrieved') return false;
+    if (regime && d.regime !== regime) return false;
+    if (statusFilter === 'confirmed' && !d.fieldConfirmed) return false;
+    if (statusFilter === 'pending' && d.fieldConfirmed) return false;
+    if (search && !d.id.toLowerCase().includes(search) && !d.agency.toLowerCase().includes(search) && !d.regime.toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function load(page) {
+  if (page) curPage = page;
+  const filtered = getFiltered();
+  const total = filtered.length;
+  const confirmed = filtered.filter(d=>d.fieldConfirmed).length;
+  const pending   = total - confirmed;
+  document.getElementById('fc-count').textContent   = `${total} device(s)`;
+  document.getElementById('fc-summary').textContent = `${confirmed} confirmed · ${pending} pending`;
+
+  const start = (curPage-1)*10;
+  const pg = filtered.slice(start, start+10);
+
+  document.getElementById('fc-body').innerHTML = pg.length
+    ? pg.map(d => `
+      <tr>
+        <td><a class="td-id" href="timeline.html?id=${d.id}">${d.id}</a></td>
+        <td class="td-muted">${fmtDateShort(d.issued)}</td>
+        <td>${d.agency}</td>
+        <td class="td-muted">${d.dest}</td>
+        <td>${regBadge(d.regime)}</td>
+        <td>${d.fieldConfirmed
+          ? `<span class="badge badge-confirmed">✅ Confirmed</span>`
+          : `<span class="badge badge-pending">⏳ Pending</span>`}</td>
+        <td class="td-muted">${d.fieldConfirmedBy||'—'}</td>
+        <td>
+          ${!d.fieldConfirmed
+            ? `<button class="btn btn-accent btn-sm" onclick="openConfirm('${d.id}')">✓ Confirm</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="revokeConfirm('${d.id}')">↩ Revoke</button>`}
+        </td>
+      </tr>`).join('')
+    : `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No devices match your filter</div></div></td></tr>`;
+
+  renderPagination('fc', total, curPage, 'load');
+}
+
+function openConfirm(id) {
+  const d = DB.getDevice(id);
+  if (!d) return;
+  confirmingId = id;
+  document.getElementById('cm-officer').value = session.role === 'Field Officer' ? session.name : '';
+  document.getElementById('cm-notes').value = '';
+  document.getElementById('cm-device-info').innerHTML = `
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:6px;">${d.id}</div>
+    <div style="font-size:12px;color:var(--text-muted);">${d.agency} &nbsp;·&nbsp; ${d.dest} &nbsp;·&nbsp; ${regBadge(d.regime)}</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Issued: ${fmtDateShort(d.issued)} &nbsp;·&nbsp; Expected return: ${fmtDateShort(d.expectedReturn)}</div>`;
+  openModal('confirm-modal');
+}
+
+function submitConfirm() {
+  const officer = document.getElementById('cm-officer').value;
+  const notes   = document.getElementById('cm-notes').value.trim();
+  if (!officer) { showToast('Select a confirming officer', 'error'); return; }
+
+  const updated = DB.updateDevice(confirmingId, {
+    fieldConfirmed: true,
+    fieldConfirmedBy: officer,
+    fieldConfirmedAt: new Date().toISOString(),
+    fieldNotes: notes,
+  });
+  DB.appendAudit(confirmingId, {
+    event: 'Field Confirmed',
+    detail: `Confirmed by ${officer}${notes ? ' · '+notes : ''}`,
+    time: fmtDate(TODAY), color:'#007a67'
+  });
+  DB.addNotification({
+    type:'retrieved', title:`Field Confirmed – ${confirmingId}`,
+    desc:`Device at ${updated?.agency} confirmed by ${officer}. Now eligible for retrieval.`,
+    officer, agency:updated?.agency, tag:'assignment',
+  });
+  DB.logAudit('Field Confirm', `Device ${confirmingId} confirmed by ${officer}`, session);
+  closeModal('confirm-modal');
+  showToast(`✅ Device ${confirmingId} confirmed`, 'success');
+  load();
+}
+
+function revokeConfirm(id) {
+  if (!confirm('Revoke field confirmation for device ' + id + '?')) return;
+  DB.updateDevice(id, { fieldConfirmed: false, fieldConfirmedBy: null, fieldConfirmedAt: null });
+  DB.appendAudit(id, { event:'Confirmation Revoked', detail:`Revoked by ${session.name}`, time:fmtDate(TODAY), color:'#e84040' });
+  showToast('Confirmation revoked', 'info');
+  load();
+}
+</script>
+</body>
+</html>

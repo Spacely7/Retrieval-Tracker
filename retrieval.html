@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retrieval — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">📥 Device Retrieval</div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="load()">🔄</button>
+        <button class="btn btn-primary btn-sm" id="ret-btn" onclick="openRetrieveModal()" disabled>📦 Retrieve (<span id="ret-count">0</span>)</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Device Retrieval Queue</div>
+          <div class="page-desc">Confirmed devices ready for physical retrieval. Bulk-select and process in one action.</div>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="ret-search" placeholder="Search Device ID, Agency, Regime..." oninput="load()"></div>
+        <select class="filter-select" id="ret-regime" onchange="load()">
+          <option value="">All Regimes</option>
+          <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+        </select>
+        <select class="filter-select" id="ret-agency" onchange="load()">
+          <option value="">All Agencies</option>
+          <option>COMPASS POWER AFRICA LTD</option><option>KOMENDA SUGAR FACTORY</option>
+          <option>RONOR MOTORS</option><option>WEB HELP GHANA</option><option>DAILY FOOD</option>
+          <option>WESTERN BEVERAGES LTD</option><option>CAVE AND GARDEN</option>
+          <option>GLOBAL POLY GHANA</option><option>MIRO TIMBER</option><option>KING RECYCLING SOLUTIONS LTD</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="select-all-bar">
+          <input type="checkbox" id="ret-all" onchange="toggleAll()">
+          <label for="ret-all" style="cursor:pointer;">Select All</label>
+          <span class="selected-count" id="ret-sel-lbl"></span>
+          <span style="margin-left:auto;font-size:12px;color:var(--text-muted);" id="ret-total-lbl"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th></th><th>Device ID</th><th>Date Issued</th><th>Expected Return</th><th>Field Confirmed</th><th>Agency</th><th>Destination</th><th>Regime</th><th>Status</th></tr>
+            </thead>
+            <tbody id="ret-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="ret-info"></span>
+          <div class="page-btns" id="ret-pages"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Retrieve Modal -->
+<div class="modal-overlay" id="retrieve-modal" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">📦 Mark Devices as Retrieved</div>
+    <div class="modal-sub">Confirm retrieval and assign the collecting officer.</div>
+    <div style="background:#f0faf7;border:1px solid rgba(0,197,163,.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;" id="retrieve-summary"></div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Retrieval Officer</label>
+      <select class="form-select" id="rm-officer">
+        <option value="">Select officer</option>
+        <option>Yaw Boateng</option><option>Kojo Rexford</option><option>Elias Brown</option><option>Kofi Brew</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Vehicle / Transport Ref (Optional)</label>
+      <input class="form-input" id="rm-vehicle" placeholder="e.g. GR-1234-22">
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label class="form-label">Collection Notes (Optional)</label>
+      <textarea class="form-textarea" id="rm-notes" placeholder="Any relevant notes..." style="min-height:60px;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-accent" onclick="submitRetrieve()">✅ Confirm Retrieval</button>
+      <button class="btn btn-outline" onclick="closeModal('retrieve-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('retrieval');
+let curPage = 1;
+
+if (session) load();
+
+function getFiltered() {
+  const search = (document.getElementById('ret-search')?.value||'').toLowerCase();
+  const regime = document.getElementById('ret-regime')?.value||'';
+  const agency = document.getElementById('ret-agency')?.value||'';
+  return DB.getDevices().filter(d => {
+    if (d.status !== 'Awaiting Retrieval') return false;
+    if (d.isDelayed || !d.fieldConfirmed) return false;
+    if (regime && d.regime !== regime) return false;
+    if (agency && d.agency !== agency) return false;
+    if (search && !d.id.toLowerCase().includes(search) && !d.agency.toLowerCase().includes(search) && !d.regime.toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function load(page) {
+  if (page) curPage = page;
+  const filtered = getFiltered();
+  const total = filtered.length;
+  document.getElementById('ret-total-lbl').textContent = total + ' device(s) in queue';
+  const start = (curPage-1)*10;
+  const pg = filtered.slice(start, start+10);
+
+  document.getElementById('ret-body').innerHTML = pg.length
+    ? pg.map(d => {
+        const daysLeft = Math.ceil((new Date(d.expectedReturn)-TODAY)/86400000);
+        const urgency = daysLeft <= 0 ? 'color:var(--red);font-weight:700;' : daysLeft <= 2 ? 'color:#d97706;font-weight:700;' : '';
+        return `<tr>
+          <td><input type="checkbox" class="ret-cb" value="${d.id}" onchange="updSel()"></td>
+          <td><a class="td-id" href="timeline.html?id=${d.id}">${d.id}</a></td>
+          <td class="td-muted">${fmtDateShort(d.issued)}</td>
+          <td style="${urgency}">${fmtDateShort(d.expectedReturn)}${daysLeft<=2&&daysLeft>=0?` <span style="font-size:10px;">(${daysLeft}d)</span>`:''}</td>
+          <td>${d.fieldConfirmed?`<span style="color:var(--accent);">✅ ${d.fieldConfirmedBy||''}</span>`:'-'}</td>
+          <td>${d.agency}</td>
+          <td class="td-muted">${d.dest}</td>
+          <td>${regBadge(d.regime)}</td>
+          <td>${statusBadge(d.status)}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No devices awaiting retrieval</div><div class="empty-desc">All field-confirmed devices appear here</div></div></td></tr>`;
+
+  document.getElementById('ret-all').checked = false;
+  renderPagination('ret', total, curPage, 'load');
+  updSel();
+}
+
+function toggleAll() {
+  const checked = document.getElementById('ret-all').checked;
+  document.querySelectorAll('.ret-cb').forEach(cb => cb.checked = checked);
+  updSel();
+}
+
+function updSel() {
+  const selected = [...document.querySelectorAll('.ret-cb:checked')];
+  const count = selected.length;
+  document.getElementById('ret-count').textContent = count;
+  document.getElementById('ret-btn').disabled = count === 0;
+  document.getElementById('ret-sel-lbl').textContent = count > 0 ? count + ' selected' : '';
+}
+
+function openRetrieveModal() {
+  const selected = [...document.querySelectorAll('.ret-cb:checked')].map(cb => cb.value);
+  if (!selected.length) return;
+  document.getElementById('retrieve-summary').innerHTML = `
+    <div style="font-size:13px;font-weight:600;">📦 ${selected.length} device(s) selected for retrieval</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${selected.join(', ')}</div>`;
+  document.getElementById('rm-officer').value = session.role === 'Retrieval Officer' ? session.name : '';
+  openModal('retrieve-modal');
+}
+
+function submitRetrieve() {
+  const officer = document.getElementById('rm-officer').value;
+  const vehicle = document.getElementById('rm-vehicle').value.trim();
+  const notes   = document.getElementById('rm-notes').value.trim();
+  if (!officer) { showToast('Select retrieval officer', 'error'); return; }
+
+  const selected = [...document.querySelectorAll('.ret-cb:checked')].map(cb => cb.value);
+  const ts = new Date().toISOString();
+
+  selected.forEach(id => {
+    DB.updateDevice(id, { status:'Retrieved', isDelayed:false, retrievalOfficer:officer, retrievalTime:ts, vehicleRef:vehicle });
+    DB.appendAudit(id, { event:'Retrieved', detail:`Collected by ${officer}${vehicle?' via '+vehicle:''}${notes?' · '+notes:''}`, time:fmtDate(TODAY), color:'#00c5a3' });
+  });
+
+  DB.addNotification({
+    type:'retrieved',
+    title:`${selected.length} Device(s) Retrieved – ${officer}`,
+    desc:`${officer} successfully retrieved ${selected.length} device(s).`,
+    officer, tag:'retrieved',
+  });
+  DB.logAudit('Retrieve Devices', `${selected.length} devices retrieved by ${officer}`, session);
+
+  closeModal('retrieve-modal');
+  showToast(`✅ ${selected.length} device(s) marked as retrieved`, 'success');
+  load();
+}
+</script>
+</body>
+</html>

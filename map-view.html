@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map View — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar"><div class="topbar-title">🗺️ Map View</div></div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div><div class="page-title">Device Destination Map</div><div class="page-desc">Visual overview of where devices are deployed across Ghana.</div></div>
+        <div class="header-actions">
+          <select class="filter-select" id="map-regime" onchange="renderMap()">
+            <option value="">All Regimes</option>
+            <option>Warehouse</option><option>Freezones</option><option>Re-Export</option><option>Transit</option><option>Petroleum</option>
+          </select>
+          <select class="filter-select" id="map-status" onchange="renderMap()">
+            <option value="">All Status</option>
+            <option>Awaiting Retrieval</option><option>Delayed</option><option>Retrieved</option>
+          </select>
+        </div>
+      </div>
+      <div class="card" style="padding:20px;margin-bottom:16px;">
+        <div id="map-container" style="height:460px;border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative;background:#e8edf5;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;" id="dest-cards"></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('mapview');
+if (session) renderMap();
+
+const DEST_COORDS = {
+  'Elubo':            {x:'11%', y:'56%'},
+  'Daily food Limited':{x:'48%',y:'49%'},
+  'Sunda Ghana Ltd':  {x:'52%', y:'38%'},
+  'Spaceplast Gh Ltd':{x:'56%', y:'62%'},
+  'Newrest':          {x:'30%', y:'31%'},
+  'Paga':             {x:'44%', y:'10%'},
+  'Keda':             {x:'78%', y:'33%'},
+  'Kumasi':           {x:'42%', y:'44%'},
+  'Tema':             {x:'56%', y:'56%'},
+  'Takoradi':         {x:'26%', y:'68%'},
+};
+
+function renderMap() {
+  const regime = document.getElementById('map-regime')?.value||'';
+  const status = document.getElementById('map-status')?.value||'';
+  const devices = DB.getDevices().filter(d => {
+    if (regime && d.regime !== regime) return false;
+    if (status && d.status !== status) return false;
+    return true;
+  });
+  const destCount = {};
+  const destDelayed = {};
+  devices.forEach(d => {
+    destCount[d.dest]   = (destCount[d.dest]||0)+1;
+    if (d.isDelayed) destDelayed[d.dest] = (destDelayed[d.dest]||0)+1;
+  });
+  const maxC = Math.max(...Object.values(destCount), 1);
+
+  const dots = Object.entries(DEST_COORDS).map(([dest, pos]) => {
+    const count   = destCount[dest]||0;
+    const delayed = destDelayed[dest]||0;
+    const size    = Math.max(10, Math.min(28, 10+count/maxC*18));
+    const color   = delayed>0?'#e84040':count>5?'#f5c842':'#00c5a3';
+    return `<div class="map-dot" style="left:${pos.x};top:${pos.y};">
+      <div class="map-dot-label">${dest} (${count}${delayed>0?' · ⚠️'+delayed+' delayed':''})</div>
+      <div class="map-dot-inner" style="width:${size}px;height:${size}px;background:${color};border:3px solid rgba(255,255,255,.85);box-shadow:0 2px 8px rgba(0,0,0,.3);"></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('map-container').innerHTML = `
+    <div style="position:relative;width:100%;height:100%;">
+      <div style="position:absolute;inset:0;background:linear-gradient(160deg,#1a3a5c,#0a1a2e);">
+        <div style="position:absolute;inset:0;opacity:.12;background-image:radial-gradient(circle at 30% 40%,rgba(0,197,163,.4) 0%,transparent 40%),radial-gradient(circle at 70% 60%,rgba(240,131,58,.3) 0%,transparent 40%);"></div>
+      </div>
+      <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.5);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;">Ghana — Device Destinations</div>
+      ${dots}
+      <!-- Stats overlay -->
+      <div style="position:absolute;top:14px;right:14px;background:rgba(0,0,0,.65);color:#fff;border-radius:10px;padding:10px 14px;font-size:11px;backdrop-filter:blur(4px);">
+        <div style="font-weight:700;font-size:12px;margin-bottom:7px;">Totals</div>
+        <div>📦 ${devices.length} devices</div>
+        <div style="color:#00c5a3;">✅ ${devices.filter(d=>d.status==='Retrieved').length} retrieved</div>
+        <div style="color:#e84040;">⚠️ ${devices.filter(d=>d.isDelayed).length} delayed</div>
+      </div>
+      <!-- Legend -->
+      <div style="position:absolute;bottom:14px;left:14px;background:rgba(0,0,0,.65);color:#fff;border-radius:10px;padding:10px 14px;font-size:11px;backdrop-filter:blur(4px);">
+        <div style="display:flex;align-items:center;gap:7px;padding:2px 0;"><div style="width:10px;height:10px;border-radius:50%;background:#00c5a3;"></div>Normal</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:2px 0;"><div style="width:10px;height:10px;border-radius:50%;background:#f5c842;"></div>High volume</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:2px 0;"><div style="width:10px;height:10px;border-radius:50%;background:#e84040;"></div>Has delayed</div>
+      </div>
+    </div>`;
+
+  // Destination cards
+  const maxD = Math.max(...DESTINATIONS.map(d=>destCount[d]||0), 1);
+  document.getElementById('dest-cards').innerHTML = DESTINATIONS.map(dest => {
+    const c  = destCount[dest]||0;
+    const dl = destDelayed[dest]||0;
+    const pct = (c/maxD*100).toFixed(1);
+    const color = dl>0?'var(--red)':c>0?'var(--accent)':'var(--border)';
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow);">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:3px;">${dest}</div>
+      <div style="font-size:12px;color:var(--text-muted);">${c} active${dl>0?` · <span style="color:var(--red);font-weight:700;">${dl} delayed</span>`:''}</div>
+      <div style="margin-top:8px;height:5px;background:var(--border);border-radius:99px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width .6s;"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

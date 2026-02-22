@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLA Rules — Retrieval Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<button class="hamburger" id="hamburger-btn">☰</button>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">⏱️ SLA Rules</div>
+      <div class="topbar-actions">
+        <button class="btn btn-accent btn-sm" onclick="saveSLA()">💾 Save Rules</button>
+      </div>
+    </div>
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
+          <div class="page-title">SLA Rules & Thresholds</div>
+          <div class="page-desc">Configure delay thresholds per regime and set up automatic escalation alerts.</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:22px;margin-bottom:16px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:6px;">⏱️ Delay Thresholds by Regime</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Devices overdue beyond these thresholds automatically move to the Delayed queue and trigger alerts.</p>
+        <div id="sla-rules"></div>
+      </div>
+
+      <div class="card" style="padding:22px;margin-bottom:16px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:6px;">📅 Upcoming Retrieval Alerts</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Send automatic notifications to officers before a device's expected return date.</p>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <label class="form-label">Alert officers</label>
+          <input class="form-input sla-input" type="number" id="sla-alert-days" min="1" max="30" style="width:70px;">
+          <label class="form-label">days before expected return</label>
+          <label class="sla-toggle"><input type="checkbox" id="sla-alert-on"><span class="sla-slider"></span></label>
+          <span style="font-size:13px;color:var(--text-muted);" id="alert-active-lbl">Active</span>
+        </div>
+      </div>
+
+      <!-- SLA Status Dashboard -->
+      <div class="card" style="padding:22px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:16px;">📊 Current SLA Status</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;" id="sla-status-cards"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script src="db.js"></script>
+<script src="shared.js"></script>
+<script>
+const session = pageInit('sla');
+if (session) renderSLA();
+
+function renderSLA() {
+  const sla = DB.getSLA();
+  document.getElementById('sla-rules').innerHTML = REGIMES.map(r => `
+    <div class="sla-rule-card">
+      <div style="font-size:22px;flex-shrink:0;">${REGIME_ICONS[r]}</div>
+      <div style="flex:1;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">${r}</div>
+        <div style="font-size:12px;color:var(--text-muted);">Escalate to Delayed after this many days overdue</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <input class="sla-input" type="number" id="sla-${r.replace(/[^a-z]/gi,'_')}" value="${sla[r]||3}" min="1" max="30">
+        <span style="font-size:12px;color:var(--text-muted);">days</span>
+        <label class="sla-toggle"><input type="checkbox" id="sla-on-${r.replace(/[^a-z]/gi,'_')}" checked><span class="sla-slider"></span></label>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('sla-alert-days').value = sla.alertDays||3;
+  document.getElementById('sla-alert-on').checked = sla.alertActive!==false;
+
+  renderSLAStatus();
+}
+
+function renderSLAStatus() {
+  const devices = DB.getDevices().filter(d=>d.status!=='Retrieved');
+  const sla = DB.getSLA();
+  document.getElementById('sla-status-cards').innerHTML = REGIMES.map(r => {
+    const rDevices = devices.filter(d=>d.regime===r);
+    const compliant = rDevices.filter(d=>!d.isDelayed).length;
+    const delayed   = rDevices.filter(d=>d.isDelayed).length;
+    const pct       = rDevices.length ? Math.round(compliant/rDevices.length*100) : 100;
+    const color     = pct>=90?'#00c5a3':pct>=70?'#f5c842':'#e84040';
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">${REGIME_ICONS[r]} ${r}</div>
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:26px;color:${color};">${pct}%</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${compliant} in SLA · ${delayed} delayed</div>
+      <div style="font-size:10px;color:var(--text-muted);">Threshold: ${sla[r]||3} days</div>
+      <div class="perf-bar-track" style="margin-top:8px;"><div class="perf-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function saveSLA() {
+  const sla = DB.getSLA();
+  REGIMES.forEach(r => {
+    const el = document.getElementById('sla-' + r.replace(/[^a-z]/gi,'_'));
+    if (el) sla[r] = parseInt(el.value) || sla[r];
+  });
+  sla.alertDays  = parseInt(document.getElementById('sla-alert-days').value)||3;
+  sla.alertActive = document.getElementById('sla-alert-on').checked;
+  DB.setSLA(sla);
+
+  // Re-evaluate delays
+  reEvaluateDelays();
+  DB.logAudit('Update SLA', `SLA thresholds updated`, session);
+  showToast('✅ SLA rules saved and applied', 'success');
+  renderSLAStatus();
+}
+</script>
+</body>
+</html>
